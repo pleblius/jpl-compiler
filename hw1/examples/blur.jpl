@@ -1,0 +1,14 @@
+fn get_pixel(x: int, y: int, img[H,W] : rgba[,]) : rgba {
+    let arr = array[i: 3, j: 3] if (x+i-1)>=0 && (x+i-1)<W && (y+j-1)>=0 && (y+j-1) < H then img[x+i-1,y+j-1] else rgba {0., 0., 0., 0.}
+    let t = sum[i: 3, j: 3] if (x+i-1)>=0 && (x+i-1)<W && (y+j-1)>=0 && (y+j-1) < H then 1.0 else 0.0
+    let a = sum[i: 3, j: 3] arr[i,j].a
+    let r = sum[i: 3, j: 3] arr[i,j].r
+    let b = sum[i: 3, j: 3] arr[i,j].b
+    let g = sum[i: 3, j: 3] arr[i,j].g
+    return rgba {r/t, g/t, b/t, a/t}
+}
+fn blur(img[H,W] : rgba[,]) : rgba[,] {
+    return array[i: H, j: W] get_pixel(i, j, img)
+}
+read image "sample.png" to sample
+write image blur(sample) to "sample-blurry.png"

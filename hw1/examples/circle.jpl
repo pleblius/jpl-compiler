@@ -1,0 +1,23 @@
+fn get_color(y: int, x: int, r: float, t: float) : rgba {
+    let r1 = r - t / 2.0
+    let r1_sq = r1 * r1
+
+    let r2 = r + t / 2.0
+    let r2_sq = r2 * r2
+
+    let black = rgba { 0.0, 0.0, 0.0, 1.0 }
+    let white = rgba { 1.0, 1.0, 1.0, 1.0 }
+    
+    let r_act = to_float(y * y + x * x)
+
+    return if (r_act < r2_sq && r_act > r1_sq) then white else black
+}
+
+fn circle(rad: float, width: float) : rgba[,] {
+    let W = 800
+    let H = 600
+
+    return array[i : H, j : W] get_color(i - H/2, j - W/2, rad, width)
+}
+
+write image circle(400.0, 10.0) to "circle.png"

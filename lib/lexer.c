@@ -5,137 +5,110 @@
 
 #include "lexer.h"
 
-#define IS_MATH_OPERATOR(c) (c == '*' || c == '+' || c == '-' || c == '%')
-#define IS_BOOL_OPERATOR(c) (c == '<' || c == '>' || c == '=' || c == '!')
-#define IS_SC_OPERATOR(c) (c == '&' || c == '|')
-#define IS_OPERATOR(c) (IS_MATH_OPERATOR(c) || IS_BOOL_OPERATOR(c) || IS_SC_OPERATOR(c))
-#define IS_DIGIT(c) (c >= '0' && c <= '9')
-#define IS_DOT(c) (c == '.')
-#define IS_CHAR(c) ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z'))
-#define IS_SCORE(c) (c == '_')
-#define IS_NEWLINE(c) (c == '\n')
-#define IS_QUOTE(c) (c == '"')
-#define IS_SLASH(c) (c == '/')
-#define IS_ESCAPE(c) (c == '\\')
-#define IS_PUNCTUATION(c) (c == '(' || c == ')' || c == '[' || c == ']' || c == '{' || c == '}' || c == ',' || c == ':')
-#define IS_ILLEGAL(c) ((c != 10 && c < 32) || c > 126)
-
-#define NUM_KEYWORDS 23
-
 extern Vector *list;
-char* fail_output = NULL;
-
-static FILE *file_ptr;
-unsigned long col;
-unsigned long line;
+extern FILE* file_ptr;
+extern char* fail_output;
 
 const char* keyword_list[] = { "array", "assert", "bool", "else", "false", "float", "fn", "if", "image", "int", "let",
                             "print", "read", "return", "show", "struct", "sum", "then", "time", "to", "true", "void", "write" };
-
-int lex(char *filename) {
-    if (!filename) {
-        fprintf(stderr, "Filename not included.\n");
-        return EXIT_FAILURE;
-    }
-
-    file_ptr = fopen(filename, "r");
-    if (!file_ptr) {
-        fprintf(stderr, "Failed to open file: %s.\n", strerror(errno));
-        return EXIT_FAILURE;
-    }
-
-    int return_status = lex_file();
-
-    fclose(file_ptr);
-
-    return return_status;
-}
 
 // Steps through the global file pointer, lexing tokens into the global token vector.
 int lex_file() {
     char c = '\0';
     unsigned long count = 1;
-
-    line = 1;
-    col = 1;
+    static unsigned long byte = 1;
+    char *buffer;
+    token_t type;
 
     // Token identification
     while (1) {
         while ((c = fgetc(file_ptr)) == ' ') {
-            ++col;
+            ++byte;
         }
 
         if (c == EOF) 
             break;
         else if IS_ILLEGAL(c) {
-            lex_create_illegal_string(c);
-
-            return EXIT_FAILURE;
+            type = ILLEGAL;
         }
         else if IS_NEWLINE(c) {
             // Consolidate newlines into a single token
             if (vector_is_empty(list) || ((Token*) vector_peek_last(list)) -> type != NEWLINE)
-                vector_append(list, create_token(NEWLINE, line, col, NULL));
+                vector_append(list, create_token(NEWLINE, byte, NULL));
             
-            col = 1;
-            ++line;
+            ++byte;
 
             continue;
         }
         else if IS_ESCAPE(c) {
             if (!IS_NEWLINE(lex_fpeek())) {
-                lex_create_invalid_string(1);
-
-                return EXIT_FAILURE;
+                count = 1;
+                type = INVALID;
             }
-
-            fgetc(file_ptr);
-            ++line;
-            col = 1;
-
-            continue;
+            else {
+                fgetc(file_ptr);
+                continue;
+            }
         }
         else if IS_SLASH(c) {
-            if (lex_comment(c, &count) == EXIT_FAILURE)
-                return EXIT_FAILURE;
+            type = lex_comment(c, &count);
         }
         else if IS_OPERATOR(c) {
-            if (lex_operator(c, &count) == EXIT_FAILURE)
-                return EXIT_FAILURE;
+            type = lex_operator(c, &count);
         }
         else if IS_PUNCTUATION(c) {
-            if (lex_punctuation(c, &count) == EXIT_FAILURE)
-                return EXIT_FAILURE;
+            type = lex_punctuation(c, &count);
         }
         else if IS_CHAR(c) {
-            if (lex_variable(c, &count) == EXIT_FAILURE)
-                return EXIT_FAILURE;
+            type = lex_variable(c, &count);
         }
         else if IS_DIGIT(c) {
-            if (lex_number(c, &count) == EXIT_FAILURE)
-                return EXIT_FAILURE;
+            type = lex_number(c, &count);
         }
         else if IS_DOT(c) {
-            if (lex_dot(c, &count) == EXIT_FAILURE)
-                return EXIT_FAILURE;
+            type = lex_dot(c, &count);
         }
         else if IS_QUOTE(c) {
-            if (lex_string(c, &count) == EXIT_FAILURE)
-                return EXIT_FAILURE;
+            type = lex_string(c, &count);
         }
         else {
-            lex_create_illegal_string(c);
-            return EXIT_FAILURE;
+            type = ILLEGAL;
         }
 
-        col += count;
+        if (type == ILLEGAL) {
+            lex_create_illegal_string(c, byte);
+
+            return EXIT_FAILURE;
+        }
+        else if (type == INVALID) {
+            lex_create_invalid_string(c, count, byte);
+
+            return EXIT_FAILURE;   
+        }
+        else if (type == VARIABLE) {
+            buffer = lex_create_string(count);
+            if (!buffer)
+                return EXIT_FAILURE;
+
+            vector_append(list, create_token(lex_parse_variable(buffer), byte, buffer));
+        }
+        else if(type == COMMENT) {}
+        else {
+            buffer = lex_create_string(count);
+            if (!buffer) 
+                return EXIT_FAILURE;
+                
+            vector_append(list, create_token(type, byte, buffer));
+        }
+
+        byte += count;
     }
 
-    vector_append(list, create_token(END_OF_FILE, line, col, NULL));
+    vector_append(list, create_token(END_OF_FILE, byte, NULL));
     return EXIT_SUCCESS;
 }
 
-int lex_variable(char c, unsigned long *count) {
+token_t lex_variable(char c, unsigned long *count) {
     unsigned long length = 1;
     c = lex_fpeek();
 
@@ -147,17 +120,11 @@ int lex_variable(char c, unsigned long *count) {
 
     if (c == EOF) fgetc(file_ptr);
 
-    char *buffer = lex_create_string(length);
-    if (!buffer) 
-        return EXIT_FAILURE;
-    
-    vector_append(list, create_token(lex_parse_variable(buffer), line, col, buffer));
-
     *count = length;
-    return EXIT_SUCCESS;
+    return VARIABLE;
 }
 
-int lex_number(char c, unsigned long *count) {
+token_t lex_number(char c, unsigned long *count) {
     unsigned long length = 1;
     token_t type;
     c = lex_fpeek();
@@ -185,17 +152,11 @@ int lex_number(char c, unsigned long *count) {
         type = INTVAL;
     }
 
-    char *buffer = lex_create_string(length);
-    if (!buffer)
-        return EXIT_FAILURE;
-
-    vector_append(list, create_token(type, line, col, buffer));
-
     *count = length;
-    return EXIT_SUCCESS;
+    return type;
 }
 
-int lex_dot(char c, unsigned long *count) {
+token_t lex_dot(char c, unsigned long *count) {
     unsigned long length = 1;
     token_t type;
 
@@ -214,61 +175,36 @@ int lex_dot(char c, unsigned long *count) {
         type = FLOATVAL;
     }
 
-    char *buffer = lex_create_string(length);
-    if (!buffer)
-        return EXIT_FAILURE;
-
-    vector_append(list, create_token(type, line, col, buffer));
-
     *count = length;
-    return EXIT_SUCCESS;
+    return type;
 }
 
-int lex_punctuation(char c, unsigned long *count) {
-    unsigned long length = 1;
-    token_t type;
+token_t lex_punctuation(char c, unsigned long *count) {
+    *count = 1;
     
     switch (c) {
         case '[':
-            type = LSQUARE;
-            break;
+            return LSQUARE;
         case ']':
-            type = RSQUARE;
-            break;
+            return RSQUARE;
         case '{':
-            type = LCURLY;
-            break;
+            return LCURLY;
         case '}':
-            type = RCURLY;
-            break;
+            return RCURLY;
         case '(':
-            type = LPAREN;
-            break;
+            return LPAREN;
         case ')':
-            type = RPAREN;
-            break;
+            return RPAREN;
         case ',':
-            type = COMMA;
-            break;
+            return COMMA;
         case ':':
-            type = COLON;
-            break;
+            return COLON;
         default:
-            lex_create_invalid_string(length);
-            return EXIT_FAILURE;
+            return INVALID;
     }
-    
-    char *buffer = lex_create_string(length);
-    if (!buffer)
-        return EXIT_FAILURE;
-    
-    vector_append(list, create_token(type, line, col, buffer));
-    
-    *count = length;
-    return EXIT_SUCCESS;
 }
 
-int lex_operator(char c, unsigned long *count) {
+token_t lex_operator(char c, unsigned long *count) {
     unsigned long length = 1;
     token_t type;
 
@@ -288,59 +224,42 @@ int lex_operator(char c, unsigned long *count) {
     }
     else if IS_SC_OPERATOR(c) {
         if (fgetc(file_ptr) != c) {
-            lex_create_invalid_string(length);
-
-            return EXIT_FAILURE;
+            type = INVALID;
         }
         ++length;
 
         type = OP;
     }
     else {
-        lex_create_invalid_string(length);
-
-        return EXIT_FAILURE;
+        type = INVALID;
     }
 
-    char *buffer = lex_create_string(length);
-    if (!buffer)
-        return EXIT_FAILURE;
-
-    vector_append(list, create_token(type, line, col, buffer));
-
     *count = length;
-    return EXIT_SUCCESS;
+    return type;
 }
 
-int lex_string(char c, unsigned long *count) {
+token_t lex_string(char c, unsigned long *count) {
     unsigned long length = 1;
+    token_t type = STRING;
 
     while ((c = fgetc(file_ptr)) != '"') {
-        ++length;
         if IS_ILLEGAL(c) {
-            col += length;
-            lex_create_illegal_string(c);
-            return EXIT_FAILURE;
+            type =  ILLEGAL;
+            break;
         }
         else if (IS_NEWLINE(c) || c == EOF) {
-            col += length;
-            lex_create_invalid_string(1);
-            return EXIT_FAILURE;
+            type = INVALID;
+            break;
         }
+        ++length;
     }
     ++length;
 
-    char *buffer = lex_create_string(length);
-    if (!buffer) 
-        return EXIT_FAILURE;
-
-    vector_append(list, create_token(STRING, line, col, buffer));
-
     *count = length;
-    return EXIT_SUCCESS;
+    return type;
 }
 
-int lex_comment(char c, unsigned long *count) {
+token_t lex_comment(char c, unsigned long *count) {
     unsigned long length = 1;
 
     c = lex_fpeek();
@@ -353,12 +272,12 @@ int lex_comment(char c, unsigned long *count) {
             ++length;
 
             if IS_ILLEGAL(c) {
-                lex_create_illegal_string(c);
-                return EXIT_FAILURE;
+                *count = length;
+                return ILLEGAL;
             }
             if (c == EOF) {
-                lex_create_invalid_string(length);
-                return EXIT_FAILURE;
+                *count = length;
+                return INVALID;
             }
         }
     }
@@ -366,37 +285,29 @@ int lex_comment(char c, unsigned long *count) {
     else if (c == '*') {
         ++length;
         while (1) {
-            if IS_NEWLINE(c) {
-                ++line;
-                col = 1;
-            }
             c = fgetc(file_ptr);
             ++length;
             if (c == '*' && lex_fpeek() == '/') break;
 
             if IS_ILLEGAL(c) {
-                lex_create_illegal_string(c);
-                return EXIT_FAILURE;
+                *count = length;
+                return ILLEGAL;
             }
             if (c == EOF) {
-                lex_create_invalid_string(1);
-                return EXIT_FAILURE;
+                *count = length;
+                return INVALID;
             }
         }
 
         fgetc(file_ptr);
     }
     else {
-        length = 1;
-
-        char *buffer = lex_create_string(length);
-        if (!buffer)
-            return EXIT_FAILURE;
-
-        vector_append(list, create_token(OP, line, col, buffer));
+        *count = 1;
+        return OP;
     }
+
     *count = length;
-    return EXIT_SUCCESS;
+    return COMMENT;
 }
 
 // Peeks at the next character without advancing the filestream.
@@ -426,29 +337,44 @@ char *lex_create_string(unsigned long length) {
 }
 
 // Creates a string of the given length plus the string escape character for the invalid token pointer.
-void lex_create_invalid_string(unsigned long length) {
-    fseek(file_ptr, -length, SEEK_CUR);
-    
-    char *buffer = (char *) malloc(length + 1);
-    if (!buffer) return;
+void lex_create_invalid_string(char c, unsigned long length, unsigned long byte) {
+    char *buffer;
+    char c2;
+    unsigned long  i;
 
-    unsigned long i;
-    for (i = 0; i < length; ++i) {
-        buffer[i] = fgetc(file_ptr);
+    if (c == '\n') {
+        buffer = "\'\\n\'";
     }
-    buffer[i] = '\0';
+    else {
+        fseek(file_ptr, -length, SEEK_CUR);
 
-    if (0 > asprintf(&fail_output, "Unable to lex. Invalid token at line: %lu, col: %lu", line, col))
+        buffer = (char *) malloc(length + 1);
+            if (!buffer) return;
+    
+        for (i = 0; i < length; ++i) {
+            c2 = fgetc(file_ptr);
+            if (c2 == '\n') break;
+
+            buffer[i] = c2;
+        }
+        buffer[i] = '\0';
+    }
+    unsigned long line = lex_get_line(byte);
+    unsigned long col = lex_get_col(byte);
+
+    if (0 > asprintf(&fail_output, "Unable to lex. Invalid token %s at line: %lu, col: %lu", buffer, line, col))
         fail_output = NULL;
     
     free(buffer);
 }
 
 // Creates a string for when an illegal or unprintable token is encountered.
-void lex_create_illegal_string(char c) {
+void lex_create_illegal_string(char c, unsigned long byte) {
     int i = (int) c;
+    unsigned long line = lex_get_line(byte);
+    unsigned long col = lex_get_col(byte);
 
-    if (0 > asprintf(&fail_output, "Unable to lex. Illegal token char:%d at line: %lu, col: %lu", i, line, col))
+    if (0 > asprintf(&fail_output, "Unable to lex. Illegal token char: '%d' at line: %lu, col: %lu", i, line, col))
         fail_output = NULL;
 }
 
@@ -533,4 +459,47 @@ token_t lex_keyword_match(int i) {
         default:
             return VARIABLE;
     }
+}
+
+void free_list(Vector *vector) {
+    for (int i = 0; i < vector->size; ++i) {
+        free_token_string(vector_get(vector, i));
+    }
+
+    vector_destroy(vector);
+}
+
+unsigned long lex_get_col(unsigned long byte) {
+    unsigned long col = 1;
+    unsigned long count = 1;
+    char c;
+
+    fseek(file_ptr, 0, SEEK_SET);
+
+    while (count < byte) {
+        c = fgetc(file_ptr);
+        ++col;
+        ++count;
+
+        if (c == '\n')
+            col = 1;
+    }
+
+    return col;
+}
+
+unsigned long lex_get_line(unsigned long byte) {
+    unsigned long line = 1;
+    unsigned long count = 1;
+
+    fseek(file_ptr, 0, SEEK_SET);
+
+    while (count < byte) {
+        if (fgetc(file_ptr) == '\n')
+            ++line;
+        
+        ++count;
+    }
+
+    return line;
 }

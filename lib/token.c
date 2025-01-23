@@ -27,7 +27,7 @@ void print_token(Token *token) {
     }
 }
 
-Token *create_token (token_t type, unsigned long line, unsigned long col, char *string) {
+Token *create_token (token_t type, unsigned long byte, char *string) {
     Token *token = (Token *) malloc(sizeof(Token));
     if (!token) {
         fprintf(stderr, "Failed to allocate memory for token.\n");
@@ -35,8 +35,7 @@ Token *create_token (token_t type, unsigned long line, unsigned long col, char *
     }
 
     token -> type = type;
-    token -> line = line;
-    token -> col = col;
+    token -> byte = byte;
     token -> string = string;
 
     return token;

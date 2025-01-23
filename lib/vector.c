@@ -9,8 +9,10 @@
 #define VECTOR_ARRAY (vector->array)
 #define LAST_INDEX (VECTOR_SIZE-1)
 
+#define CAPACITY_DEFAULT 10
+
 // Creates an empty vector with the given initial capacity.
-Vector* vector_create_cap(int capacity) {
+Vector *vector_create_cap(int capacity) {
     if (capacity <= 0) {
         fprintf(stderr, "Vector capacity must be greater than 0.\n");
         exit(EXIT_FAILURE);
@@ -34,9 +36,9 @@ Vector* vector_create_cap(int capacity) {
     return vector;
 }
 
-// Creates a vector with the default capacity (10).
-Vector* vector_create() {
-    return vector_create_cap(10);
+// Creates a vector with the default capacity (CAPACITY_DEFAULT).
+Vector *vector_create() {
+    return vector_create_cap(CAPACITY_DEFAULT);
 }
 
 // Expands the vector's capacity by a factor of 2.
@@ -128,7 +130,7 @@ void vector_append(Vector *vector, void *data) {
 }
 
 // Sets the element stored at the given index to the given value and returns that value if successful, overriding the element at that index. Returns overridden element if successful.
-void* vector_set(Vector *vector, int index, void *data) {
+void *vector_set(Vector *vector, int index, void *data) {
     if (!vector) {
         fprintf(stderr, "Invalid vector reference.\n");
         exit(EXIT_FAILURE);
@@ -149,7 +151,7 @@ void* vector_set(Vector *vector, int index, void *data) {
 }
 
 // Returns the element stored at the given index.
-void* vector_get(Vector *vector, int index) {
+void *vector_get(Vector *vector, int index) {
     if (!vector) {
         fprintf(stderr, "Invalid vector reference.\n");
         exit(EXIT_FAILURE);
@@ -167,7 +169,7 @@ void* vector_get(Vector *vector, int index) {
 }
 
 // Returns the last element in the vector and removes it from the vector. Returns NULL if unsuccessful.
-void* vector_pop_last(Vector *vector) {
+void *vector_pop_last(Vector *vector) {
     if (!vector) {
         fprintf(stderr, "Invalid vector reference.\n");
         exit(EXIT_FAILURE);
@@ -177,14 +179,14 @@ void* vector_pop_last(Vector *vector) {
     void* result = vector_get(vector, LAST_INDEX);
     --VECTOR_SIZE;
 
-    if (VECTOR_SIZE < VECTOR_CAPACITY/3 && VECTOR_CAPACITY >= 20)
+    if (VECTOR_SIZE < VECTOR_CAPACITY/3 && VECTOR_CAPACITY >= 2*CAPACITY_DEFAULT)
         vector_shrink(vector);
 
     return result;
 }
 
 // Returns the last element in the vector.
-void* vector_peek_last(Vector *vector) {
+void *vector_peek_last(Vector *vector) {
     if (!vector) {
         fprintf(stderr, "Invalid vector reference.\n");
         exit(EXIT_FAILURE);
@@ -204,7 +206,7 @@ int vector_size(Vector *vector) {
     return VECTOR_SIZE;
 }
 
-// Returns true if the vector is empty.
+// Returns 1 if the vector is empty.
 int vector_is_empty(Vector *vector) {
     if (!vector) {
         fprintf(stderr, "Invalid vector reference.\n");
@@ -248,7 +250,7 @@ void vector_print(Vector *vector) {
     printf("Capacity: %d \n", VECTOR_CAPACITY);
 }
 
-// Destroys the given vector.
+// Destroys the given vector, freeing all structs.
 void vector_destroy(Vector *vector) {
     if (!vector) {
         fprintf(stderr, "Invalid vector reference.\n");

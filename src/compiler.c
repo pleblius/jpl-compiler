@@ -1,3 +1,4 @@
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -5,25 +6,15 @@
 
 #include "vector.h"
 #include "lexer.h"
+#include "parser.h"
+#include "compiler.h"
 
 #define MAXIMUM_BUFFER 1024
 
-typedef struct {
-    int (*run_mode)(char*);
-    char* file_name;
-} run_t;
-
-void parse_args(int, char**);
-
-int help_mode(char*);
-int lex_mode(char*);
-int parse_mode(char*);
-
-void free_token_list(Vector*);
-
 Vector *list;
-run_t mode;
-char buffer[MAXIMUM_BUFFER];
+char *fail_output;
+FILE *file_ptr;
+RunType mode;
 
 int main(int argc, char **argv) {
     if (argc < 2) {
@@ -42,8 +33,11 @@ int main(int argc, char **argv) {
 
     // Run compiler
     if (mode.run_mode == NULL) return EXIT_FAILURE;
-
+    
+    file_ptr = fopen(mode.file_name, "r");
     int run_status = mode.run_mode(mode.file_name);
+
+    fclose(file_ptr);
 
     free_token_list(list);
     list = NULL;
@@ -74,15 +68,18 @@ void parse_args(int input_count, char **input_args) {
                         flag_bool = 1;
                     }
                     break;
-
+                case ('p'):
+                    if (!flag_bool) {
+                        mode.run_mode = &parse_mode;
+                        flag_bool = 1;
+                    }
+                    break;
                 case ('h'):
+                default:
+                    printf("Invalid flag.\n\n");
                     mode.run_mode = &help_mode;
                     mode.file_name = "./HELP.md";
                     return;
-
-                default:
-                    printf("Invalid flag. Use -h for help.\n");
-                    exit(EXIT_FAILURE);
             }
         }
         // Filenames
@@ -102,17 +99,22 @@ int help_mode(char* filename) {
         return 1;
     }
 
+    char buffer[MAXIMUM_BUFFER];
+
     char *line;
     while ((line = fgets(buffer, MAXIMUM_BUFFER, f_ptr)) != NULL) {
         printf("%s", line);
     }
+
     return EXIT_SUCCESS;
 }
 
 int lex_mode(char* filename) {
+    (void) filename;
+
     int exit_status;
 
-    exit_status = lex(filename);
+    exit_status = lex_file();
     
     if (exit_status == EXIT_SUCCESS)
         lex_print_output();
@@ -123,11 +125,15 @@ int lex_mode(char* filename) {
 }
 
 int parse_mode(char* filename) {
+    (void) filename;
+
     int exit_status;
 
-    exit_status = lex(filename);
-    if (exit_status == EXIT_FAILURE)
+    exit_status = lex_file();
+    if (exit_status == EXIT_FAILURE) {
+        lex_print_fail();
         return exit_status;
+    }
 
     return exit_status;
 }

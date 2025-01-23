@@ -42,16 +42,18 @@ typedef enum {
     VARIABLE,
     VOID,
     WRITE,
+    COMMENT,
+    INVALID,
+    ILLEGAL
 } token_t;
 
 typedef struct {
     token_t type;
-    unsigned long line;
-    unsigned long col;
+    unsigned long byte;
     char *string;
 } Token;
 
-Token *create_token(token_t, unsigned long, unsigned long, char*);
+Token *create_token(token_t, unsigned long, char*);
 void print_token(Token*);
 void free_token_string(Token*);
 

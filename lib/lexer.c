@@ -4,13 +4,16 @@
 #include <string.h>
 
 #include "lexer.h"
+#include "error.h"
 
-extern Vector *list;
+extern Vector *token_list;
 extern FILE* file_ptr;
 extern char* fail_output;
 
 const char* keyword_list[] = { "array", "assert", "bool", "else", "false", "float", "fn", "if", "image", "int", "let",
                             "print", "read", "return", "show", "struct", "sum", "then", "time", "to", "true", "void", "write" };
+const TokenType keyword_tokens[] = { ARRAY, ASSERT, BOOL, ELSE, FALSE, FLOAT, FN, IF, IMAGE, INT, LET,
+                            PRINT, READ, RETURN, SHOW, STRUCT, SUM, THEN, TIME, TO, TRUE, VOID, WRITE };
 
 // Steps through the global file pointer, lexing tokens into the global token vector.
 int lex_file() {
@@ -18,7 +21,7 @@ int lex_file() {
     unsigned long count = 1;
     static unsigned long byte = 1;
     char *buffer;
-    token_t type;
+    TokenType type;
 
     // Token identification
     while (1) {
@@ -33,8 +36,8 @@ int lex_file() {
         }
         else if IS_NEWLINE(c) {
             // Consolidate newlines into a single token
-            if (vector_is_empty(list) || ((Token*) vector_peek_last(list)) -> type != NEWLINE)
-                vector_append(list, create_token(NEWLINE, byte, NULL));
+            if (vector_is_empty(token_list) || ((Token*) vector_peek_last(token_list)) -> type != NEWLINE)
+                vector_append(token_list, create_token(NEWLINE, byte, NULL));
             
             ++byte;
 
@@ -90,7 +93,7 @@ int lex_file() {
             if (!buffer)
                 return EXIT_FAILURE;
 
-            vector_append(list, create_token(lex_parse_variable(buffer), byte, buffer));
+            vector_append(token_list, create_token(lex_parse_variable(buffer), byte, buffer));
         }
         else if(type == COMMENT) {}
         else {
@@ -98,17 +101,17 @@ int lex_file() {
             if (!buffer) 
                 return EXIT_FAILURE;
                 
-            vector_append(list, create_token(type, byte, buffer));
+            vector_append(token_list, create_token(type, byte, buffer));
         }
 
         byte += count;
     }
 
-    vector_append(list, create_token(END_OF_FILE, byte, NULL));
+    vector_append(token_list, create_token(END_OF_FILE, byte, NULL));
     return EXIT_SUCCESS;
 }
 
-token_t lex_variable(char c, unsigned long *count) {
+TokenType lex_variable(char c, unsigned long *count) {
     unsigned long length = 1;
     c = lex_fpeek();
 
@@ -124,9 +127,9 @@ token_t lex_variable(char c, unsigned long *count) {
     return VARIABLE;
 }
 
-token_t lex_number(char c, unsigned long *count) {
+TokenType lex_number(char c, unsigned long *count) {
     unsigned long length = 1;
-    token_t type;
+    TokenType type;
     c = lex_fpeek();
 
     while IS_DIGIT(c) {
@@ -156,9 +159,9 @@ token_t lex_number(char c, unsigned long *count) {
     return type;
 }
 
-token_t lex_dot(char c, unsigned long *count) {
+TokenType lex_dot(char c, unsigned long *count) {
     unsigned long length = 1;
-    token_t type;
+    TokenType type;
 
     c = lex_fpeek();
 
@@ -179,7 +182,7 @@ token_t lex_dot(char c, unsigned long *count) {
     return type;
 }
 
-token_t lex_punctuation(char c, unsigned long *count) {
+TokenType lex_punctuation(char c, unsigned long *count) {
     *count = 1;
     
     switch (c) {
@@ -204,9 +207,9 @@ token_t lex_punctuation(char c, unsigned long *count) {
     }
 }
 
-token_t lex_operator(char c, unsigned long *count) {
+TokenType lex_operator(char c, unsigned long *count) {
     unsigned long length = 1;
-    token_t type;
+    TokenType type;
 
     if IS_MATH_OPERATOR(c) {
         type = OP;
@@ -238,9 +241,9 @@ token_t lex_operator(char c, unsigned long *count) {
     return type;
 }
 
-token_t lex_string(char c, unsigned long *count) {
+TokenType lex_string(char c, unsigned long *count) {
     unsigned long length = 1;
-    token_t type = STRING;
+    TokenType type = STRING;
 
     while ((c = fgetc(file_ptr)) != '"') {
         if IS_ILLEGAL(c) {
@@ -259,7 +262,7 @@ token_t lex_string(char c, unsigned long *count) {
     return type;
 }
 
-token_t lex_comment(char c, unsigned long *count) {
+TokenType lex_comment(char c, unsigned long *count) {
     unsigned long length = 1;
 
     c = lex_fpeek();
@@ -359,8 +362,8 @@ void lex_create_invalid_string(char c, unsigned long length, unsigned long byte)
         }
         buffer[i] = '\0';
     }
-    unsigned long line = lex_get_line(byte);
-    unsigned long col = lex_get_col(byte);
+    unsigned long line = get_line(byte);
+    unsigned long col = get_col(byte);
 
     if (0 > asprintf(&fail_output, "Unable to lex. Invalid token %s at line: %lu, col: %lu", buffer, line, col))
         fail_output = NULL;
@@ -371,8 +374,8 @@ void lex_create_invalid_string(char c, unsigned long length, unsigned long byte)
 // Creates a string for when an illegal or unprintable token is encountered.
 void lex_create_illegal_string(char c, unsigned long byte) {
     int i = (int) c;
-    unsigned long line = lex_get_line(byte);
-    unsigned long col = lex_get_col(byte);
+    unsigned long line = get_line(byte);
+    unsigned long col = get_col(byte);
 
     if (0 > asprintf(&fail_output, "Unable to lex. Illegal token char: '%d' at line: %lu, col: %lu", i, line, col))
         fail_output = NULL;
@@ -381,8 +384,8 @@ void lex_create_illegal_string(char c, unsigned long byte) {
 // Prints the successfully lexed file's tokens.
 void lex_print_output() {
     int i;
-    for (i = 0; i < vector_size(list); ++i) {
-        print_token(vector_get(list, i));
+    for (i = 0; i < vector_size(token_list); ++i) {
+        print_token(vector_get(token_list, i));
     }
 
     printf("Compilation succeeded: lexical analysis complete.\n");
@@ -397,7 +400,7 @@ void lex_print_fail() {
 }
 
 // Takes a token string and returns the associated token type, either keyword or variable.
-token_t lex_parse_variable(char* string) {
+TokenType lex_parse_variable(char* string) {
     int i;
     for (i = 0; i < NUM_KEYWORDS; ++i) {
         if (!strcmp(string, keyword_list[i])) 
@@ -408,57 +411,11 @@ token_t lex_parse_variable(char* string) {
 }
 
 // Return the token type associated with the given index of keyword.
-token_t lex_keyword_match(int i) {
-    switch(i) {
-        case 0:
-            return ARRAY;
-        case 1:
-            return ASSERT;
-        case 2:
-            return BOOL;
-        case 3:
-            return ELSE;
-        case 4:
-            return FALSE;
-        case 5:
-            return FLOAT;
-        case 6:
-            return FN;
-        case 7:
-            return IF;
-        case 8:
-            return IMAGE;
-        case 9:
-            return INT;
-        case 10:
-            return LET;
-        case 11:
-            return PRINT;
-        case 12:
-            return READ;
-        case 13:
-            return RETURN;
-        case 14:
-            return SHOW;
-        case 15:
-            return STRUCT;
-        case 16:
-            return SUM;
-        case 17:
-            return THEN;
-        case 18:
-            return TIME;
-        case 19:
-            return TO;
-        case 20:
-            return TRUE;
-        case 21:
-            return VOID;
-        case 22:
-            return WRITE;
-        default:
-            return VARIABLE;
-    }
+TokenType lex_keyword_match(int i) {
+    if (i < NUM_KEYWORDS)
+        return keyword_tokens[i];
+    
+    return VARIABLE;
 }
 
 void free_list(Vector *vector) {
@@ -467,39 +424,4 @@ void free_list(Vector *vector) {
     }
 
     vector_destroy(vector);
-}
-
-unsigned long lex_get_col(unsigned long byte) {
-    unsigned long col = 1;
-    unsigned long count = 1;
-    char c;
-
-    fseek(file_ptr, 0, SEEK_SET);
-
-    while (count < byte) {
-        c = fgetc(file_ptr);
-        ++col;
-        ++count;
-
-        if (c == '\n')
-            col = 1;
-    }
-
-    return col;
-}
-
-unsigned long lex_get_line(unsigned long byte) {
-    unsigned long line = 1;
-    unsigned long count = 1;
-
-    fseek(file_ptr, 0, SEEK_SET);
-
-    while (count < byte) {
-        if (fgetc(file_ptr) == '\n')
-            ++line;
-        
-        ++count;
-    }
-
-    return line;
 }

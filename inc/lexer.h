@@ -25,22 +25,20 @@ int lex_file();
 void lex_print_output();
 void lex_print_fail();
 void lex_clear_list(Vector*);
-token_t lex_parse_variable(char*);
-token_t lex_keyword_match(int);
+TokenType lex_parse_variable(char*);
+TokenType lex_keyword_match(int);
 char *lex_create_string(unsigned long);
 void lex_create_invalid_string(char c, unsigned long, unsigned long);
 void lex_create_illegal_string(char c, unsigned long);
 char lex_fpeek();
-unsigned long lex_get_line(unsigned long);
-unsigned long lex_get_col(unsigned long);
 
-token_t lex_variable(char, unsigned long*);
-token_t lex_dot(char, unsigned long*);
-token_t lex_number(char, unsigned long*);
-token_t lex_string(char, unsigned long*);
-token_t lex_operator(char, unsigned long*);
-token_t lex_punctuation(char, unsigned long*);
-token_t lex_comment(char, unsigned long*);
+TokenType lex_variable(char, unsigned long*);
+TokenType lex_dot(char, unsigned long*);
+TokenType lex_number(char, unsigned long*);
+TokenType lex_string(char, unsigned long*);
+TokenType lex_operator(char, unsigned long*);
+TokenType lex_punctuation(char, unsigned long*);
+TokenType lex_comment(char, unsigned long*);
 
 void free_list(Vector*);
 

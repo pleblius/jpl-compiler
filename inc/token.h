@@ -45,15 +45,15 @@ typedef enum {
     COMMENT,
     INVALID,
     ILLEGAL
-} token_t;
+} TokenType;
 
 typedef struct {
-    token_t type;
+    TokenType type;
     unsigned long byte;
     char *string;
 } Token;
 
-Token *create_token(token_t, unsigned long, char*);
+Token *create_token(TokenType, unsigned long, char*);
 void print_token(Token*);
 void free_token_string(Token*);
 

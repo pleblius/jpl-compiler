@@ -1,4 +1,3 @@
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -6,12 +5,12 @@
 
 #include "vector.h"
 #include "lexer.h"
-#include "parser.h"
 #include "compiler.h"
+#include "parser.h"
 
 #define MAXIMUM_BUFFER 1024
 
-Vector *list;
+Vector *token_list;
 char *fail_output;
 FILE *file_ptr;
 RunType mode;
@@ -22,8 +21,8 @@ int main(int argc, char **argv) {
         exit(EXIT_FAILURE);
     }
     
-    list = vector_create();    
-    if (!list) {
+    token_list = vector_create();    
+    if (!token_list) {
         fprintf(stderr, "Failed to create vector.\n");
         exit(EXIT_FAILURE);
     }
@@ -35,12 +34,17 @@ int main(int argc, char **argv) {
     if (mode.run_mode == NULL) return EXIT_FAILURE;
     
     file_ptr = fopen(mode.file_name, "r");
+    if (!file_ptr) {
+        fprintf(stderr, "Failed to open file '%s':\n\t%s.\nCompilation failed.\n", mode.file_name, strerror(errno));
+        exit(EXIT_FAILURE);
+    }
     int run_status = mode.run_mode(mode.file_name);
 
     fclose(file_ptr);
 
-    free_token_list(list);
-    list = NULL;
+    free_token_list(token_list);
+    free_command_list();
+    token_list = NULL;
 
     return run_status;
 }
@@ -75,6 +79,9 @@ void parse_args(int input_count, char **input_args) {
                     }
                     break;
                 case ('h'):
+                    mode.run_mode = &help_mode;
+                    mode.file_name = "./HELP.md";
+                    break;
                 default:
                     printf("Invalid flag.\n\n");
                     mode.run_mode = &help_mode;
@@ -95,7 +102,7 @@ void parse_args(int input_count, char **input_args) {
 int help_mode(char* filename) {
     FILE *f_ptr = fopen(filename, "r");
     if (!f_ptr) {
-        fprintf(stderr, "Failed to open file: %s.\n", strerror(errno));
+        fprintf(stderr, "Failed to open file '%s':\n\t%s.\nCompilation failed.\n", mode.file_name, strerror(errno));
         return 1;
     }
 
@@ -134,6 +141,10 @@ int parse_mode(char* filename) {
         lex_print_fail();
         return exit_status;
     }
+
+    exit_status = parse();
+    if (exit_status == EXIT_SUCCESS)
+        parse_print_output();
 
     return exit_status;
 }

@@ -21,24 +21,20 @@
 #define NUM_KEYWORDS 23
 
 // Performs and prints lexical analysis of the provided .jpl file.
-int lex_file();
+int lex();
 void lex_print_output();
-void lex_print_fail();
 void lex_clear_list(Vector*);
-TokenType lex_parse_variable(char*);
 TokenType lex_keyword_match(int);
+TokenType match_keyword(char *, size_t);
 char *lex_create_string(unsigned long);
-void lex_create_invalid_string(char c, unsigned long, unsigned long);
-void lex_create_illegal_string(char c, unsigned long);
-char lex_fpeek();
 
-TokenType lex_variable(char, unsigned long*);
-TokenType lex_dot(char, unsigned long*);
-TokenType lex_number(char, unsigned long*);
-TokenType lex_string(char, unsigned long*);
-TokenType lex_operator(char, unsigned long*);
-TokenType lex_punctuation(char, unsigned long*);
-TokenType lex_comment(char, unsigned long*);
+TokenType lex_variable(char*, unsigned long*);
+TokenType lex_dot(char*, unsigned long*);
+TokenType lex_number(char*, unsigned long*);
+TokenType lex_string(char*, unsigned long*);
+TokenType lex_operator(char*, unsigned long*);
+TokenType lex_punctuation(char*, unsigned long*);
+TokenType lex_comment(char*, unsigned long*);
 
 void free_list(Vector*);
 

@@ -36,17 +36,12 @@ char *string_dup(char* src) {
     return dst;
 }
 
-int string_slice(char *dst, char *src, size_t start, size_t end) {
-    size_t len = end - start;
-
-    for (size_t i = 0; i < len; ++i) {
-        dst[i] = src[start+i];
-    }
-    dst[end] = '\0';
-
-    return EXIT_SUCCESS;
+// Slices the src string from [start, end) into dst
+void string_slice(char *dst, char *src, size_t start, size_t end) {
+    strncpy(dst, src + start, end-start);
 }
 
+// Generates a new string from the character array.
 String *string_from_array(char *p_c) {
     String *string = (String *) malloc(sizeof(String));
     if (!string) return NULL;
@@ -58,39 +53,42 @@ String *string_from_array(char *p_c) {
 
     return string;
 }
-String *string_from_ref (StringRef *strref) {
+// Generates a new string as a copy of strref.
+String *string_from_ref (StringRef strref) {
     String *string = (String *) malloc(sizeof(String));
     if (!string) return NULL;
-    string->length = strref->length;
 
+    string->length = strref.length;
     string->string = (char *) malloc(string->length);
     if (!string->string) return NULL;
-
-    size_t i;
-    for (i = 0; i < string->length; ++i) {
-        string->string[i] = strref->string[i];
-    }
-    string->string[i] = '\0';
+    strncpy(string->string, strref.string, strref.length);
 
     return string;
 }
-StringRef *new_stringref(char *p_c, size_t start, size_t end) {
-    StringRef *strref = (StringRef *) malloc(sizeof(StringRef));
-    if (!strref) return NULL;
+// Generates a reference to [start, end) of the given array.
+StringRef ref_from_array(char *p_c, size_t start, size_t end) {
+    StringRef strref;
 
-    strref -> length = end - start;
-    strref -> string = p_c + start;
+    strref.length = end - start;
+    strref.string = p_c + start;
 
     return strref;
 }
-StringRef *ref_from_string(String *string, size_t start, size_t end) {
-    StringRef *strref = (StringRef *) malloc(sizeof(StringRef));
-    if (!strref) return NULL;
-  
-    strref->length = end - start;
-    strref->string = string->string + start;
+// Generates a reference to [start, end) of the given String.
+StringRef ref_from_string(String *string, size_t start, size_t end) {
+    StringRef strref;
+
+    strref.length = end - start;
+    strref.string = string->string + start;
 
     return strref;
+}
+char *array_from_ref(StringRef strref) {
+    char *string = malloc(strref.length + 1);
+
+    if (strncpy(string, strref.string, strref.length) == NULL) return NULL;
+    string[strref.length] = '\0';
+    return string;
 }
 
 void free_string(String *string) {
@@ -100,14 +98,12 @@ void free_string(String *string) {
 void print_string(String *string) {
     printf("%s", string->string);
 }
-void print_string_ref(StringRef *strref) {
-    char string[strref->length + 1];
+void print_string_ref(StringRef strref) {
+    size_t length = strref.length;
+    char string[length + 1];
 
-    size_t i;
-    for (i = 0; i < strref->length; ++i) {
-        string[i] = strref->string[i];
-    }
-    string[i] = '\0';
+    strncpy(string, strref.string, length);
+    string[length] = '\0';
 
     printf("%s", string);
 }

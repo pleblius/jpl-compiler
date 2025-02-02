@@ -3,216 +3,269 @@
 #include <string.h>
 
 #include "error.h"
-#include "compiler.h"
-#include "lexer.h"
 #include "stringops.h"
+#include "vector.h"
 
 #define MAXIMUM_BUFFER 1024
+#define OUTPUT stdout
 
-extern RunType mode;
-extern FILE* file_ptr;
-extern char* token_strings[];
+Vector *error_list;
 
-void parse_error(ParseError error, TokenType expected, Token *token) {
-    switch(error) {
-        case INVALID_COMMAND:
-        case INVALID_EXPRESSION:
+void program_error(char *file_string, char *file_name, Vector *token_list) {
+    size_t line;
+    size_t col;
+
+    for (int i = 0; i < error_list->size; ++i) {
+        ErrorStruct *error = vector_get(error_list, i);
+        get_loc(error->error, file_string, &line, &col);
+
+        print_error_desc(file_name, error, token_list, line, col);
+        
+        if (error->type != LEX_ERROR && error->subtype.lex_error != ILLEGAL_CHARACTER)
+        print_error_line(file_string, error, line);
+    }
+
+    fprintf(OUTPUT, "\nCompilation failed.\n");
+}
+
+void parse_error(ParseErrorType subtype, size_t start_index, size_t error_index, size_t end_index, char *misc) {
+    ErrorStruct *error = malloc(sizeof(ErrorStruct));
+    if (!error) exit(EXIT_FAILURE);
+
+    error->start = start_index;
+    error->error = error_index;
+    error->end = end_index;
+    error->type = PARSE_ERROR;
+    error->subtype.parse_error = subtype;
+
+    if (misc != NULL) error->misc_string = misc;
+
+    if (!error_list) {
+        error_list = vector_create();
+        if (!error_list) exit(EXIT_FAILURE);
+    }
+    vector_append(error_list, error);
+}
+void lex_error(LexErrorType subtype, size_t start_index, size_t error_index, size_t end_index, char *misc) {
+    ErrorStruct *error = malloc(sizeof(ErrorStruct));
+    if (!error) exit(EXIT_FAILURE);
+
+    error->start = start_index;
+    error->error = error_index;
+    error->end = end_index;
+    error->type = LEX_ERROR;
+    error->subtype.lex_error = subtype;
+
+    if (misc != NULL) error->misc_string = misc;
+
+    if (!error_list) {
+        error_list = vector_create();
+        if (!error_list) exit(EXIT_FAILURE);
+    }
+    vector_append(error_list, error);
+}
+
+
+void print_error_desc(char *file_name, ErrorStruct *error, Vector *token_list, size_t line, size_t col) {
+    switch(error->type) {
+        case PARSE_ERROR:
+            fprintf(OUTPUT, "\nParsing error at\t %s:%ld:%ld\n\t", file_name, line, col);
+
+            print_parse_error_desc(error, token_list);
+            break;
+        case LEX_ERROR:
+            fprintf(OUTPUT, "\nLexing error at\t %s:%ld:%ld\n\t", file_name, line, col);
+
+            print_lex_error_desc(error, token_list);
+            break;
+    }
+}
+
+void print_parse_error_desc(ErrorStruct *error, Vector *token_list) {
+    Token *start_token = vector_get(token_list, error->start);
+    Token *error_token = vector_get(token_list, error->error);
+    char *start_string = array_from_ref(start_token->strref);
+    char *error_string = array_from_ref(error_token->strref);
+    char *misc_string = "";
+
+    if (error->misc_string != NULL) misc_string = error->misc_string;
+
+    switch (error->subtype.parse_error) {
         case INVALID_ARG:
-        case INVALID_TOKEN:
-            parse_token_error(expected, token);
-            break; 
-        case MISSING_NUMBER:
-            parse_missing_number(expected, token);
+            fprintf(OUTPUT, "Unable to parse ARGUMENT.\n\tExpected: '[variable]'.\n\tFound: '%s'.\n", error_string);
+            break;
+        case INVALID_BIND:
+            fprintf(OUTPUT, "Unable to parse VARIABLE BINDING.\n\tExpected: '[LVALUE] : [TYPE]'.\n\tFound: '%s'.\n", error_string);
+            break;
+        case INVALID_CMD:
+            fprintf(OUTPUT, "Unable to parse COMMAND.\n\tExpected: 'read', 'write', 'let', 'assert', 'print', 'show', 'time', 'fn', 'struct'.\n");
+            fprintf(OUTPUT, "\tFound: '%s'.\n", error_string);
+            break;
+        case INVALID_EXPR:
+            fprintf(OUTPUT, "Unable to parse EXPRESSION.\n\tExpected: '[integer]', '[float]', 'true', 'false', 'void' ");
+            fprintf(OUTPUT, "'[variable]', '[arrayliteral]', '[structliteral]', '[EXPRESSION].[variable]', '[arrayindex]', '[function call]'.\n\t");
+            fprintf(OUTPUT, "Found: '%s'.\n", error_string);
+            break;
+        case INVALID_LVALUE:
+            fprintf(OUTPUT, "Unable to parse LVALUE.\n\tExpected: '[variable]' or [variable][array]'.\n\t");
+            fprintf(OUTPUT, "Found: '%s'.\n.", error_string);
+            break;
+        case INVALID_STMT:
+            fprintf(OUTPUT, "Unable to parse STATEMENT.\n'\tExpected: 'let', 'assert', 'return'.\n\tFound: '%s'.\n", error_string);
+            break;
+        case INVALID_TYPE:
+            fprintf(OUTPUT, "Unable to parse TYPE.\n\tExpected: 'int', 'float', 'bool', 'void', '[struct variable]' or 'TYPE[array]'.\n\t");
+            fprintf(OUTPUT, "Found: '%s'.\n", error_string);
+            break;
+        case UNEXPECTED_TOKEN:
+            fprintf(OUTPUT, "Unexpected token: '%s'.\n", error_string);
+            break;
+        case MISSING_TOKEN:
+            fprintf(OUTPUT, "Missing expected token.\n\tExpected: '%s'.\n\tFound: '%s.\n", misc_string, error_string);
+            break;
+        case INT_RANGE:
+            fprintf(OUTPUT, "Integer value out of range.\n\tValue: '%s'\n", error_string);
+            break;
+        case FLOAT_RANGE:
+            fprintf(OUTPUT, "Floating point value out of range.\n\tValue: '%s'\n", error_string);
+            break;
+        case MISSING_BRACE:
+            fprintf(OUTPUT, "Unclosed brace.\n\tExpected: '}'.\n\tFound: '%c'.\n", error_string[0]);
+            break;
+        case MISSING_PAREN:
+            fprintf(OUTPUT, "Unclosed parenthesis.\n\tExpected: ')'.\n\tFound: '%c'.\n", error_string[0]);
+            break;
+        case MISSING_BRACKET:
+            fprintf(OUTPUT, "Unclosed bracket.\n\tExpected: ']'.\n\tFound: '%c'.\n", error_string[0]);
+            break;
+        case MISSING_NEWLINE:
+            fprintf(OUTPUT, "Missing newline.\n\tExpected: 'Newline'.\n\tFound: '%s'.\n", error_string);
+            break;
+        case MISSING_COLON:
+            fprintf(OUTPUT, "Missing colon in binding.\n\tExpected ':' in '%s %s'.\n", start_string, error_string);
             break;
         case MISSING_STRING:
-            parse_missing_string(expected, token);
+            fprintf(OUTPUT, "Missing string literal.\n\tExpected: '\"[string]\"' before %s.\n", error_string);
             break;
-        case OUT_OF_RANGE:
-            parse_range_error(token);
-    }
-}
-
-void parse_missing_number(TokenType expected, Token *token) {
-    char *string;
-    unsigned long loc = token->byte;
-    switch (expected) {
-        case FLOATVAL:
-            string = "float";
+        case MISSING_COMMA:
+            fprintf(OUTPUT, "Missing comma in bindings.\n\tExpected ',' in '%s %s'.\n", start_string, error_string);
             break;
-        case INTVAL:
-            string = "int";
+    }
+
+    free(start_string);
+    free(error_string);
+}
+
+void print_lex_error_desc(ErrorStruct *error, Vector *token_list) {
+    Token *token = vector_get(token_list, error->error);
+    char *string = array_from_ref(token->strref);
+
+    switch (error->subtype.lex_error) {
+        case INVALID_STRING:
+            fprintf(OUTPUT, "Invalid string.\n\tExpected: '\"'.\n\tFound '%c'.\n", string[0]);
             break;
-        default:
-            string = "";
-    }
-    unsigned long line = get_line(loc);
-    unsigned long col = get_col(loc);
-
-    printf("\nCompilation error at %s:%ld:%ld\n", mode.file_name, get_line(loc), get_col(loc));
-    printf("\tExpected: %s\n\n", string);
-    print_error_line(line, col, token);
-    printf("Compilation failed\n");
-}
-
-void parse_range_error(Token *token) {
-    unsigned long loc = token->byte;
-    unsigned long line = get_line(loc);
-    unsigned long col = get_col(loc);
-
-    printf("\nCompilation error at %s:%ld:%ld\n", mode.file_name, line, col);
-    printf("\tNumeric value out of range: %s\n\n", token->string);
-    print_error_line(line, col, token);
-    printf("Compilation failed\n");
-
-}
-
-void parse_missing_token(TokenType expected, Token *token) {
-    unsigned long loc = token->byte;
-    unsigned long line = get_line(loc);
-    unsigned long col = get_col(loc);
-
-    printf("\nCompilation error at %s:%ld:%ld\n", mode.file_name, get_line(loc), get_col(loc));
-    printf("\tMissing token. Expected: %s\n\n", token_strings[expected]);
-    print_error_line(line, col, token);
-    printf("Compilation failed\n");
-
-}
-
-void parse_missing_string(TokenType expected, Token *token) {
-    unsigned long loc = token->byte;
-    unsigned long line = get_line(loc);
-    unsigned long col = get_col(loc);
-
-    printf("\nCompilation error at %s:%ld:%ld\n", mode.file_name, line, col);
-    printf("\tMissing token string. Expected type %s\n\n", token_strings[expected]);
-    print_error_line(line, col, token);
-    printf("Compilation failed\n");
-
-}
-
-void parse_token_error(TokenType expected, Token *token) {
-    unsigned long loc = token -> byte;
-    unsigned long line = get_line(loc);
-    unsigned long col = get_col(loc);
-    
-    printf("\nCompilation error at %s:%ld:%ld\n", mode.file_name, get_line(loc), get_col(loc));
-    printf("\tExpected: %s\n", token_strings[expected]);
-    printf("\tFound: %s\n\n", token_strings[token->type]);
-    print_error_line(line, col, token);
-    printf("Compilation failed\n");
-
-}
-
-void parse_arg_error() {
-    printf("Compilation failed.\n");
-}
-
-void parse_cmd_error() {
-    printf("Compilation failed.\n");
-}
-
-void parse_expr_error() {
-    printf("Compilation failed.\n");
-}
-
-void lex_error() {
-
-}
-
-unsigned long get_col(unsigned long byte) {
-    unsigned long col = 1;
-    unsigned long count = 1;
-    char c;
-
-    fseek(file_ptr, 0, SEEK_SET);
-
-    while (count < byte) {
-        c = fgetc(file_ptr);
-        ++col;
-        ++count;
-
-        if (c == '\n')
-            col = 1;
+        case INVALID_ESCAPE:
+            fprintf(OUTPUT, "Invalid escape.\n\tExpected: 'Newline'. Found '%s'.\n", string);
+            break;
+        case ILLEGAL_CHARACTER:
+            fprintf(OUTPUT, "Illegal character 'u+%d'.\n", (int)(string[0]));
+            break;
+        case INVALID_OPERATOR:
+            fprintf(OUTPUT, "Invalid operator.\n\tExpected: '&&', '||'.\n\tFound: '%s'.\n", string);
+            break;
+        case INVALID_COMMENT:
+            fprintf(OUTPUT, "Invalid comment: '%s'.\n", string);
     }
 
-    return col;
+    free(string);
 }
 
-unsigned long get_line(unsigned long byte) {
-    unsigned long line = 1;
-    unsigned long count = 1;
-
-    fseek(file_ptr, 0, SEEK_SET);
-
-    while (count < byte) {
-        if (fgetc(file_ptr) == '\n')
-            ++line;
-        
-        ++count;
+void print_error_line(char *p_c, ErrorStruct *error, size_t line) {
+    size_t line_start = 0;
+    size_t line_end = 0;
+    size_t i;
+    for (i = error->start; i > 0; --i) {
+        if (p_c[i] == '\n') {
+            line_start = i;
+            break;
+        }
+    }
+    for (i = error->end; i > 0; ++i) {
+        if (p_c[i] == '\n' || p_c[i] == EOF || p_c[i] == '\0') {
+            line_end = i;
+            break;
+        }
     }
 
-    return line;
-}
+    size_t line_length = line_end - line_start + 10;
 
-void print_error_line(unsigned long line, unsigned long col, Token *token) {
-    if (fseek(file_ptr, token->byte - col, SEEK_SET) != 0) return;
+    if (line_length + 1> MAXIMUM_BUFFER) {
+        fprintf(OUTPUT, "Line too long to print:\n%ld |\n", line);
+        return;
+    }
 
-    unsigned long print_start = 0;
-    unsigned long print_end = 0;
-    unsigned long print_point = 0;
-    
-    char *buffer = malloc(MAXIMUM_BUFFER);
-    char *string_line = malloc(MAXIMUM_BUFFER);
-    char *error_line = malloc(MAXIMUM_BUFFER);
+    size_t print_end = 0;
+    for (size_t i = error->end; i > error->error; --i) {
+        if (p_c[i] == ' ' || p_c[i] == '\n') {
+            print_end = i;
+            break;
+        }
+    }
+
+    char *pre_line = malloc(MAXIMUM_BUFFER);
+    if (!pre_line) return;
+    strncpy(pre_line, p_c + line_start, error->start - line_start);
+    pre_line[error->start - line_start] = '\0';
+
+    char *err_line = malloc(MAXIMUM_BUFFER);
+    if (!err_line) return;
+    strncpy(err_line, p_c + error->start, error->end - error->start);
+    err_line[error->end - error->start] = '\0';
+
     char *post_line = malloc(MAXIMUM_BUFFER);
+    if (!post_line) return;
+    strncpy(post_line, p_c + print_end, line_end - error->end);
+    post_line[line_end - error->end] = '\0';
 
-    if (fgets(string_line, MAXIMUM_BUFFER, file_ptr) == NULL) return;
+    fprintf(OUTPUT, "%ld | %s", line, pre_line);
+    fprintf(OUTPUT, RED_BOLD);
+    fprintf(OUTPUT, "%s", err_line);
+    fprintf(OUTPUT, RESET);
+    fprintf(OUTPUT, "%s", post_line);
+    
+    for (i = line_start; i < error->start; ++i) {
+        fprintf(OUTPUT, " ");
+    }
+    fprintf(OUTPUT, RED_BOLD);
+    for (; i < error->error; ++i) {
+        fprintf(OUTPUT, "~");
+    }
+    fprintf(OUTPUT, "^");
+    for (; i < error->end; ++i) {
+        fprintf(OUTPUT, "~");
+    }
+    fprintf(OUTPUT, RESET);
+    fprintf(OUTPUT, "\n");
 
-    int check = snprintf(buffer, MAXIMUM_BUFFER, "%ld | %s", line, string_line);
-    if (check < 0) {
-        fprintf(stderr, "Buffer failer.\n");
-        exit(EXIT_FAILURE);
-    }
-
-    print_point = col + strlen(buffer) - strlen(string_line) - 1;
-    unsigned int i;
-    for (i = 0; i < print_point; ++i) {
-        if (buffer[i] == ' ') {
-            print_start = i + 1;
-        }
-    }
-    while (i < strlen(buffer)) {
-        if (buffer[i] == ' ' || buffer[i] == '\n' || buffer[i] == EOF) {
-            print_end = i-1; break;
-        }
-        ++i;
-    }
-    strcpy(post_line, buffer + print_end+1);
-    buffer[print_end+1] = '\0';
-    strcpy(error_line, buffer + print_start);
-    buffer[print_start] = '\0';
-
-    printf("%s", buffer);
-    printf(RED_BOLD);
-    printf("%s", error_line);
-    printf(RESET);
-    printf("%s", post_line);
-
-    for (i = 0; i < print_start; ++i) {
-        putc(' ', stdout);
-    }
-    printf(RED_BOLD);
-    for (; i < print_point; ++i) {
-        printf("~");
-    }
-    printf("^");
-    for (; i < print_end; ++i) {
-        printf("~");
-    }
-    printf(RESET "\n\n");
-
-    free(buffer);
-    free(string_line);
+    free(pre_line);
     free(post_line);
-    free(error_line);
+    free(err_line);
+}
+
+void get_loc(size_t byte, char *p_c, size_t *p_line, size_t *p_col) {
+    size_t line = 1;
+    size_t col = 1;
+
+    for (size_t i = 0; i < byte; ++i) {
+        if (p_c[i] == '\n') {
+            col = 1;
+            ++line;    
+        }
+        else {
+            ++col;
+        }
+    }
+
+    *p_line = line;
+    *p_col = col;
 }

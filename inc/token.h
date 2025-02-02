@@ -1,6 +1,8 @@
 #ifndef TOKEN_H
 #define TOKEN_H
 
+#include "stringops.h"
+
 typedef enum {
     ARRAY,
     ASSERT,
@@ -49,12 +51,10 @@ typedef enum {
 
 typedef struct {
     TokenType type;
-    unsigned long byte;
-    char *string;
+    size_t byte;
+    StringRef strref;
 } Token;
 
-Token *create_token(TokenType, unsigned long, char*);
 void print_token(Token*);
-void free_token_string(Token*);
-
+Token *create_token(TokenType, size_t, size_t, char*);
 #endif // TOKEN_H

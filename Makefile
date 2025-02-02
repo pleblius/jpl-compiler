@@ -1,28 +1,59 @@
 SRCDIR=./src
+PRODDIR=./src/prods
 LIBDIR=./lib
 INCDIR=./inc
 BINDIR=./bin
 
 CC=gcc
-CFLAGS=-I$(INCDIR) -O2 -Wall -Wextra -Wpedantic -fsanitize=address,undefined
-DFLAGS=-I$(INCDIR) -g -Wall -Wextra -Wpedantic -fsanitize=address,undefined
+RELEASEFLAGS=-I$(INCDIR) -O3 -Wall -Wextra -Wpedantic
+DEBUGFLAGS=-I$(INCDIR) -g -Wall -Wextra -Wpedantic -fsanitize=address,undefined
+CFLAGS=$(RELEASEFLAGS)
+
 EXE=jplc
-
 TEST=test.jpl
+FLAGS=-p
 
-SRCFILES=$(shell find $(SRCDIR) -name "*.c")
-LIBFILES=$(shell find $(LIBDIR) -name "*.c")
-HFILES=$(shell find $(INCDIR) -name "*.h")
+_LIB = stringops token vector error
+_PARSE = parser prod
+_PRODS = arg cmd expr lvalue stmt type bind
+_SRC = compiler lexer parser
 
-$(EXE): $(SRCFILES) $(LIBFILES) $(HFILES)
-	$(CC) $(CFLAGS) -o $(EXE) $(SRCFILES) $(LIBFILES)
+LIBDEPS = $(patsubst %,$(INCDIR)/%.h,$(_LIB))
+PARSEDEPS = $(patsubst %,$(INCDIR)/%.h,$(_PARSE))
+PRODDEPS = $(patsubst %,$(INCDIR)/%.h,$(_PRODS))
+SRCDEPS = $(patsubst %,$(INCDIR)/%.h,$(_SRC))
 
-debug:
-	$(CC) $(DFLAGS) -o $(EXE) $(SRCFILES) $(LIBFILES)
+LIBOBJ = $(patsubst %,$(BINDIR)/%.o,$(_LIB))
+PRODSOBJ = $(patsubst %,$(BINDIR)/%.o,$(_PRODS))
+SRCOBJ = $(patsubst %,$(BINDIR)/%.o,$(_SRC))
 
-run: $(EXE)
-	./$(EXE) -l $(TEST)
+$(EXE): $(LIBOBJ) $(SRCOBJ) $(LIBOBJ) $(PRODSOBJ)
+	$(CC) -o $@ $^ $(CFLAGS)
 
-.PHONY: clean
+$(LIBOBJ): $(BINDIR)/%.o: $(LIBDIR)/%.c $(LIBDEPS)
+	$(CC) -c -o $@ $< $(CFLAGS)
+
+$(PRODSOBJ): $(BINDIR)/%.o: $(PRODDIR)/%.c $(LIBDEPS) $(PARSEDEPS)
+	$(CC) -c -o $@ $< $(CFLAGS)
+
+$(SRCOBJ): $(BINDIR)/%.o: $(SRCDIR)/%.c $(LIBDEPS) $(SRCDEPS) $(LEXDEPS) $(PARSEDEPS)
+	$(CC) -c -o $@ $< $(CFLAGS)
 
 clean:
+	@rm -f $(BINDIR)/*.o
+	@rm -f *.txt
+	@rm -f callgrind.*
+	@rm -rf *.out
+	@rm -rf *.s
+
+run: $(EXE)
+	@./$(EXE) $(FLAGS) $(TEST)
+
+debug: CFLAGS=$(DEBUGFLAGS)
+debug: $(EXE)
+
+lines:
+	wc -l src/*.c
+	wc -l src/prods/*.c
+	wc -l lib/*.c
+	wc -l inc/*.h

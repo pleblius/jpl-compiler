@@ -9,44 +9,29 @@ const char* token_strings[] = { "ARRAY", "ASSERT", "BOOL", "COLON", "COMMA", "DO
     "SHOW", "STRING", "STRUCT", "SUM", "THEN", "TIME", "TO", "TRUE", "VARIABLE", "VOID", "WRITE" };
 
 void print_token(Token *token) {
-    if (!token) {
-        fprintf(stderr, "Attempt to print non-existent token.\n");
-        exit(EXIT_FAILURE);
-    }
+    if (!token) return;
+    char *str_array = array_from_ref(token->strref);
 
     if (token -> type == NEWLINE || token -> type == END_OF_FILE) {
         printf("%s\n", token_strings[token->type]);
     }
     else {
-        if (!(token->string)) {
-            fprintf(stderr, "Token contains invalid string.\n");
-            exit(EXIT_FAILURE);
-        }
+        if (!(token->strref.string)) return;
 
-        printf("%s '%s'\n", token_strings[token->type], token->string);
+        printf("%s '%s'\n", token_strings[token->type], str_array);
     }
+
+    free(str_array);
 }
 
-Token *create_token (TokenType type, unsigned long byte, char *string) {
+Token *create_token(TokenType type, size_t start, size_t count, char *pc) {
     Token *token = (Token *) malloc(sizeof(Token));
-    if (!token) {
-        fprintf(stderr, "Failed to allocate memory for token.\n");
-        exit(EXIT_FAILURE);
-    }
+    if (!token) return NULL;
 
-    token -> type = type;
-    token -> byte = byte;
-    token -> string = string;
+    token->type = type;
+    token->byte = start;
+    token->strref.length = count;
+    token->strref.string = pc;
 
     return token;
-}
-
-void free_token_string(Token *token) {
-    if (!token) {
-        fprintf(stderr, "Attempt to free string from invalid token.\n");
-        exit(EXIT_FAILURE);
-    }
-
-    free(token -> string);
-    token -> string = NULL;
 }

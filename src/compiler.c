@@ -7,13 +7,17 @@
 #include "lexer.h"
 #include "compiler.h"
 #include "parser.h"
+#include "error.h"
 
 #define MAXIMUM_BUFFER 1024
 
+#define DEBUG 0
+
 Vector *token_list;
-char *fail_output;
 FILE *file_ptr;
 RunType mode;
+char *file_string;
+size_t file_size;
 
 int main(int argc, char **argv) {
     if (argc < 2) {
@@ -38,13 +42,38 @@ int main(int argc, char **argv) {
         fprintf(stderr, "Failed to open file '%s':\n\t%s.\nCompilation failed.\n", mode.file_name, strerror(errno));
         exit(EXIT_FAILURE);
     }
-    int run_status = mode.run_mode(mode.file_name);
 
-    fclose(file_ptr);
+    fseek(file_ptr, 0, SEEK_END);
+    file_size = ftell(file_ptr);
+    fseek(file_ptr, 0, SEEK_SET);
+    file_string = malloc(file_size + 1);
+    if (!file_string) {
+        fprintf(stderr, "Failed to allocated string memory.\n");
+        return EXIT_FAILURE;
+    }
 
+    int run_status = fread(file_string, 1, file_size, file_ptr);
+    if (run_status == -1) {
+        fprintf(stderr, "String read error: %s.\n", strerror(errno));
+        exit(EXIT_FAILURE);
+    }
+    if ((size_t) run_status < file_size) {
+        fprintf(stderr, "Insufficient buffer space.\n");
+        exit(EXIT_FAILURE);
+    }
+    file_string[file_size] = '\0';
+
+    run_status = mode.run_mode(mode.file_name);
+
+    #if DEBUG
     free_token_list(token_list);
     free_command_list();
     token_list = NULL;
+    free(file_string);
+    #endif // DEBUG
+
+    if (run_status != 0)
+        program_error(file_string, mode.file_name, token_list);
 
     return run_status;
 }
@@ -121,14 +150,14 @@ int lex_mode(char* filename) {
 
     int exit_status;
 
-    exit_status = lex_file();
+    exit_status = lex();
     
-    if (exit_status == EXIT_SUCCESS)
+    if (exit_status == EXIT_SUCCESS) {
         lex_print_output();
-    else
-        lex_print_fail();
+        return EXIT_SUCCESS;
+    }
 
-    return exit_status;
+    return EXIT_FAILURE;
 }
 
 int parse_mode(char* filename) {
@@ -136,12 +165,7 @@ int parse_mode(char* filename) {
 
     int exit_status;
 
-    exit_status = lex_file();
-    if (exit_status == EXIT_FAILURE) {
-        lex_print_fail();
-        return exit_status;
-    }
-
+    lex();
     exit_status = parse();
     if (exit_status == EXIT_SUCCESS)
         parse_print_output();
@@ -150,10 +174,5 @@ int parse_mode(char* filename) {
 }
 
 void free_token_list(Vector *vector) {
-    int i;
-    for (i = 0; i < vector->size; ++i) {
-        free_token_string((Token *) vector_get(vector, i));
-    }
-
     vector_destroy(vector);
 }

@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include "vector.h"
 
@@ -8,11 +9,10 @@
 #define VECTOR_IS_EMPTY (!VECTOR_SIZE)
 #define VECTOR_ARRAY (vector->array)
 #define LAST_INDEX (VECTOR_SIZE-1)
-
 #define CAPACITY_DEFAULT 10
 
 // Creates an empty vector with the given initial capacity.
-Vector *vector_create_cap(int capacity) {
+Vector *vector_create_cap(size_t capacity) {
     if (capacity <= 0) {
         fprintf(stderr, "Vector capacity must be greater than 0.\n");
         exit(EXIT_FAILURE);
@@ -55,14 +55,10 @@ void vector_expand(Vector *vector) {
         fprintf(stderr, "Array memory allocation failed.\n");
         exit(EXIT_FAILURE);
     }
+
+    memcpy(VECTOR_ARRAY, temp_array, VECTOR_CAPACITY*sizeof(void*));
     
     VECTOR_CAPACITY *= 2;
-
-    int i;
-    for (i = 0; i < VECTOR_SIZE; ++i) {
-        VECTOR_ARRAY[i] = temp_array[i];
-    }
-
     free(temp_array);
 }
 
@@ -82,23 +78,15 @@ void vector_shrink(Vector *vector) {
     }
 
     VECTOR_CAPACITY /= 2;
-
-    int i;
-    for (i = 0; i < VECTOR_SIZE; ++i) {
-        VECTOR_ARRAY[i] = temp_array[i];
-    }
+    memcpy(VECTOR_ARRAY, temp_array, VECTOR_CAPACITY*sizeof(void*));
 
     free(temp_array);
 }
 
 // Inserts the given element into the vector at the given index. All elements at or greater than that index are shifted up 1 index.
-void vector_insert(Vector *vector, int index, void *data) {
+void vector_insert(Vector *vector, size_t index, void *data) {
     if (!vector) {
         fprintf(stderr, "Invalid vector reference.\n");
-        exit(EXIT_FAILURE);
-    }
-    if (index < 0) {
-        fprintf(stderr, "Index must be non-negative.\n");
         exit(EXIT_FAILURE);
     }
     if (index > VECTOR_SIZE) {
@@ -108,7 +96,7 @@ void vector_insert(Vector *vector, int index, void *data) {
 
     if (VECTOR_SIZE == VECTOR_CAPACITY) vector_expand(vector);
 
-    int i;
+    size_t i;
     for (i = LAST_INDEX; i >= index; --i) {
         VECTOR_ARRAY[i+1] = VECTOR_ARRAY[i];
     }
@@ -130,13 +118,9 @@ void vector_append(Vector *vector, void *data) {
 }
 
 // Sets the element stored at the given index to the given value and returns that value if successful, overriding the element at that index. Returns overridden element if successful.
-void *vector_set(Vector *vector, int index, void *data) {
+void *vector_set(Vector *vector, size_t index, void *data) {
     if (!vector) {
         fprintf(stderr, "Invalid vector reference.\n");
-        exit(EXIT_FAILURE);
-    }
-    if (index < 0) {
-        fprintf(stderr, "Index must be non-negative.\n");
         exit(EXIT_FAILURE);
     }
     if (index > VECTOR_SIZE) {
@@ -151,13 +135,9 @@ void *vector_set(Vector *vector, int index, void *data) {
 }
 
 // Returns the element stored at the given index.
-void *vector_get(Vector *vector, int index) {
+void *vector_get(Vector *vector, size_t index) {
     if (!vector) {
         fprintf(stderr, "Invalid vector reference.\n");
-        exit(EXIT_FAILURE);
-    }
-    if (index < 0) {
-        fprintf(stderr, "Index must be non-negative.\n");
         exit(EXIT_FAILURE);
     }
     if (index > VECTOR_SIZE) {
@@ -197,7 +177,7 @@ void *vector_peek_last(Vector *vector) {
 }
 
 // Returns the number of elements in the vector.
-int vector_size(Vector *vector) {
+size_t vector_size(Vector *vector) {
     if (!vector) {
         fprintf(stderr, "Invalid vector reference.\n");
         exit(EXIT_FAILURE);
@@ -224,7 +204,7 @@ void vector_clear(Vector *vector) {
     }
     if VECTOR_IS_EMPTY return;
 
-    int i;
+    size_t i;
     for (i = 0; i < VECTOR_SIZE; ++i) {
         free(VECTOR_ARRAY[i]);
         VECTOR_ARRAY[i] = NULL;
@@ -240,14 +220,14 @@ void vector_print(Vector *vector) {
         exit(EXIT_FAILURE);
     }
 
-    int i;
+    size_t i;
     printf("Array: ");
     for (i = 0; i <= LAST_INDEX; ++i) {
         printf("%p ", VECTOR_ARRAY[i]);
     }
 
-    printf("\nSize: %d \n", VECTOR_SIZE);
-    printf("Capacity: %d \n", VECTOR_CAPACITY);
+    printf("\nSize: %ld \n", VECTOR_SIZE);
+    printf("Capacity: %ld \n", VECTOR_CAPACITY);
 }
 
 // Destroys the given vector, freeing all structs.

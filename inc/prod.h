@@ -9,7 +9,9 @@
 #define MALLOC_FAILURE exit(EXIT_FAILURE)
 
 typedef enum { READ_CMD, WRITE_CMD, LET_CMD, ASSERT_CMD, PRINT_CMD, SHOW_CMD, TIME_CMD, FN_CMD, STRUCT_CMD } CmdType;
-typedef enum { INT_EXPR, FLOAT_EXPR, TRUE_EXPR, FALSE_EXPR, VAR_EXPR, ARRAY_EXPR, VOID_EXPR, STRUCTLITERAL_EXPR, DOT_EXPR, ARRAYINDEX_EXPR, CALL_EXPR } ExprType;
+typedef enum { INT_EXPR, FLOAT_EXPR, TRUE_EXPR, FALSE_EXPR, VAR_EXPR, ARRAY_EXPR, VOID_EXPR, 
+                STRUCTLITERAL_EXPR, DOT_EXPR, ARRAYINDEX_EXPR, CALL_EXPR, UNOP_EXPR, BINOP_EXPR,  IF_EXPR,
+                ARRAY_LOOP_EXPR, SUM_LOOP_EXPR } ExprType;
 typedef enum { VAR_ARG } ArgType;
 typedef enum { VAR_LVALUE, ARRAY_LVALUE } LValueType;
 typedef enum { INT_TYPE, FLOAT_TYPE, BOOL_TYPE, ARRAY_TYPE, VOID_TYPE, STRUCT_TYPE } TypeType;
@@ -51,18 +53,25 @@ typedef struct {
 
 typedef struct Expr {
     ExprType type;
+
     union {
         int64_t int_value;
         double float_value;
         char *string;
         struct Expr *expr;
         Vector *expr_list;
+        Vector *var_list;
     } field1;
     
     union {
         char *string;
         Vector *expr_list;
+        struct Expr *expr;
     } field2;
+
+    union {
+        struct Expr *expr;
+    } field3;
 } Expr;
 
 typedef struct Cmd {
@@ -127,6 +136,7 @@ int parse_fnbindings(uint64_t*, Vector*);
 int parse_fnstmts(uint64_t*, Vector*);
 int parse_structmembers(uint64_t*, Vector*, Vector*);
 
+int parse_expr_literal(uint64_t*, Expr*);
 int parse_intexpr(uint64_t*, Expr*);
 int parse_floatexpr(uint64_t*, Expr*);
 int parse_trueexpr(uint64_t*, Expr*);
@@ -138,8 +148,20 @@ int parse_dotexpr(uint64_t*, Expr*);
 int parse_arrayindexexpr(uint64_t*, Expr*);
 int parse_callexpr(uint64_t*, Expr*);
 int parse_structliteralexpr(uint64_t*, Expr*);
-
+int parse_prefixexpr(uint64_t*, Expr*);
+int parse_postfixexpr(uint64_t*, Expr*);
+int parse_binopexpr(uint64_t*, Expr*, uint32_t);
+int parse_arrayloopexpr(uint64_t*, Expr*);
+int parse_sumloopexpr(uint64_t*, Expr*);
+int parse_ifthenexpr(uint64_t*, Expr*);
+int parse_unopexpr(uint64_t*, Expr*);
+int is_prefix(uint64_t);
+int is_postfix(uint64_t);
+int is_binop(uint64_t, char**);
+uint32_t get_precedence(char*);
+int parse_loopbinds(uint64_t*, Vector*, Vector*);
 int parse_exprlist(uint64_t*, Vector*, TokenType);
+void correct_exprprecedence(Expr*);
 
 int parse_vararg(uint64_t*, Arg*);
 
@@ -165,6 +187,7 @@ char *cmd_struct_string(Cmd*);
 
 char *expr_string(Expr*);
 char *exprlist_string(Vector*);
+char *exprbind_string(Expr*);
 
 char *arg_string(Arg*);
 char *type_string(Type*);
@@ -188,4 +211,5 @@ void free_bind(Bind*);
 
 void free_exprlist(Vector*);
 void free_lvaluelist(Vector*);
+
 #endif // PROD_H

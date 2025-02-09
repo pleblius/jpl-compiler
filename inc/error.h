@@ -38,7 +38,6 @@ typedef enum {
 typedef struct {
     size_t start;
     size_t error;
-    size_t end;
     ErrorType type;
 
     union {
@@ -50,16 +49,16 @@ typedef struct {
 
 } ErrorStruct;
 
-void program_error(char*, char*, Vector*);
+void program_error();
 
-void parse_error(ParseErrorType, size_t, size_t, size_t, char*);
-void lex_error(LexErrorType, size_t, size_t, size_t, char*);
+void parse_error(ParseErrorType, size_t, size_t, char*);
+void lex_error(LexErrorType, size_t, size_t, char*);
 
 void print_error_desc(char*, ErrorStruct*, Vector*, size_t, size_t);
 void print_lex_error_desc(ErrorStruct*, Vector*);
 void print_parse_error_desc(ErrorStruct*, Vector*);
 
-void print_error_line(char*, ErrorStruct*, size_t);
+void print_error_line(char*, size_t, size_t, size_t, ErrorStruct*);
 void get_loc(size_t, char*, size_t*, size_t*);
 
 #endif // ERROR_H

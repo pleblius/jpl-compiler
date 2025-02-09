@@ -3,21 +3,21 @@
 
 typedef struct {
     void **array;
-    int size;
-    int capacity;
+    size_t size;
+    size_t capacity;
 } Vector;
 
-Vector *vector_create_cap(int);
+Vector *vector_create_cap(size_t);
 Vector *vector_create();
 void vector_expand(Vector*);
 void vector_shrink(Vector*);
-void vector_insert(Vector*, int, void*);
+void vector_insert(Vector*, size_t, void*);
 void vector_append(Vector*, void*);
-void *vector_set(Vector*, int, void*);
-void *vector_get(Vector*, int);
+void *vector_set(Vector*, size_t, void*);
+void *vector_get(Vector*, size_t);
 void *vector_pop_last(Vector*);
 void *vector_peek_last(Vector*);
-int vector_size(Vector*);
+size_t vector_size(Vector*);
 void vector_clear(Vector*);
 void vector_print(Vector*);
 void vector_destroy(Vector*);

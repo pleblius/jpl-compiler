@@ -13,10 +13,10 @@ EXE=jplc
 TEST=test.jpl
 FLAGS=-p
 
-_LIB = stringops token vector error
+_LIB = stringops token vector
 _PARSE = parser prod
 _PRODS = arg cmd expr lvalue stmt type bind
-_SRC = compiler lexer parser
+_SRC = compiler lexer parser error
 
 LIBDEPS = $(patsubst %,$(INCDIR)/%.h,$(_LIB))
 PARSEDEPS = $(patsubst %,$(INCDIR)/%.h,$(_PARSE))

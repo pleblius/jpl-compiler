@@ -47,7 +47,7 @@ int parse() {
         }
 
         if (expect_token(index, NEWLINE, NULL) == EXIT_FAILURE) {
-            parse_error(MISSING_NEWLINE, start_index, index, index, NULL);
+            parse_error(MISSING_NEWLINE, start_index, index, NULL);
 
             while (peek_token(index) != NEWLINE && peek_token(index) != END_OF_FILE) {
                 ++index;
@@ -81,7 +81,7 @@ int expect_token(uint64_t index, TokenType type, char **p_string) {
 void parse_print_output() {
     char *print_string;
 
-    for (int i = 0; i < command_list->size; ++i) {
+    for (size_t i = 0; i < command_list->size; ++i) {
         print_string = cmd_string(vector_get(command_list, i));
         
         printf("%s\n", print_string);
@@ -94,7 +94,7 @@ void parse_print_output() {
 
 void free_command_list() {
     if (!command_list) return;
-    for (int i = 0; i < command_list -> size; ++i) {
+    for (size_t i = 0; i < command_list -> size; ++i) {
         free_cmd(vector_get(command_list, i));
     }
 

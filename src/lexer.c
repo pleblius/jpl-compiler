@@ -53,12 +53,12 @@ int lex() {
         else if IS_OPERATOR(c) {
             type = lex_operator(pc, &count);
             if (type == INVALID)
-                lex_error(INVALID_OPERATOR, token_index, token_index, token_index+1, NULL);
+                lex_error(INVALID_OPERATOR, token_index, token_index, NULL);
         }
         else if IS_QUOTE(c) {
             type = lex_string(pc, &count);
             if (type == INVALID)
-                lex_error(INVALID_STRING, token_index, token_index, token_index+1, NULL);
+                lex_error(INVALID_STRING, token_index, token_index, NULL);
         }
         else if IS_DIGIT(c) {
             type = lex_number(pc, &count);
@@ -69,13 +69,13 @@ int lex() {
         else if IS_SLASH(c) {
             type = lex_comment(pc, &count);
             if (type == INVALID)
-                lex_error(INVALID_COMMENT, token_index, token_index, token_index+1, NULL);
+                lex_error(INVALID_COMMENT, token_index, token_index, NULL);
         }
         else if IS_ESCAPE(c) {
             if (!IS_NEWLINE(pc[1])) {
                 count = 2;
                 type = INVALID;
-                lex_error(INVALID_ESCAPE, token_index, token_index, token_index+1, NULL);
+                lex_error(INVALID_ESCAPE, token_index, token_index, NULL);
             }
             else {
                 pc += 2;
@@ -97,7 +97,7 @@ int lex() {
             continue;
         }
         else if (type == ILLEGAL) {
-            lex_error(ILLEGAL_CHARACTER, token_index, token_index, token_index+1, NULL);
+            lex_error(ILLEGAL_CHARACTER, token_index, token_index, NULL);
         }
 
         Token *token = create_token(type, byte, count, pc);
@@ -310,8 +310,7 @@ TokenType lex_comment(char *pc, unsigned long *count) {
 
 // Prints the successfully lexed file's tokens.
 void lex_print_output() {
-    int i;
-    for (i = 0; i < vector_size(token_list); ++i) {
+    for (size_t i = 0; i < vector_size(token_list); ++i) {
         print_token(vector_get(token_list, i));
     }
 

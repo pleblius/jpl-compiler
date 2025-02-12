@@ -12,38 +12,42 @@ const char *bind_strings[] = { "" };
 
 int parse_bind(uint64_t* p_index, Bind *node) {
     uint64_t index = *p_index;
-    int status = EXIT_SUCCESS;
 
     LValue *lvalue_field = (LValue *) malloc(sizeof(LValue));
     if (!lvalue_field) MALLOC_FAILURE;
+    if (parse_lvalue(&index, lvalue_field) == EXIT_FAILURE)
+        goto bind_exit1;
     
-    if (parse_lvalue(&index, lvalue_field) == EXIT_FAILURE) {
-        free(lvalue_field);
-        lvalue_field = NULL;
-        return EXIT_FAILURE;
-    }
-    
-    if (expect_token(index, COLON, NULL) == EXIT_FAILURE) {
-        parse_error(MISSING_COLON, index-1, index, index+1, NULL);
-        status = EXIT_FAILURE;
-    }
+    if (expect_token(index, COLON, NULL) == EXIT_FAILURE)
+        parse_error(MISSING_COLON, index-1, index, NULL);
     else ++index;
 
     Type *type_field = (Type *) malloc(sizeof(Type));
     if (!type_field) MALLOC_FAILURE;
-    
-    if (parse_type(&index, type_field) == EXIT_FAILURE) {
-        free(type_field);
-        type_field = NULL;
-        status = EXIT_FAILURE;
-    }
+    if (parse_type(&index, type_field) == EXIT_FAILURE)
+        goto bind_exit2;
 
     *p_index = index;
     node->type = VAR_BIND;
     node->field1 = lvalue_field;
     node->field2 = type_field;
+    return EXIT_SUCCESS;
 
-    return status;
+bind_exit2:
+    free_lvalue(lvalue_field);
+    free(type_field);
+bind_exit1:
+    free(lvalue_field);
+    *p_index = index;
+    return EXIT_FAILURE;
+}
+
+void free_bind(Bind* node) {
+    if (!node) return;
+    free_lvalue(node->field1);
+    free_type(node->field2);
+    free(node->field1);
+    free(node->field2);
 }
 
 char *bind_string(Bind* node) {
@@ -55,12 +59,4 @@ char *bind_string(Bind* node) {
     output = string_combine(5, bind_type, string1, " ", string2, "");
     free(string1); free(string2);
     return output;
-}
-
-void free_bind(Bind* node) {
-    if (!node) return;
-    free_lvalue(node->field1);
-    free_type(node->field2);
-    free(node->field1);
-    free(node->field2);
 }

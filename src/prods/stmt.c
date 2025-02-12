@@ -16,7 +16,8 @@ extern Vector *token_list;
 int parse_stmt(uint64_t* p_index, Stmt *node) {
     uint64_t index = *p_index;
     TokenType type = peek_token(*p_index);
-    int status;
+    int status = EXIT_SUCCESS;
+
     ++index;
     switch (type) {
         case LET:
@@ -29,8 +30,7 @@ int parse_stmt(uint64_t* p_index, Stmt *node) {
             status = parse_returnstmt(&index, node);
             break;
         default:
-            ++index;
-            parse_error(INVALID_STMT, *p_index, index, index+1, NULL);
+            parse_error(INVALID_STMT, *p_index, index, NULL);
             status = EXIT_FAILURE;
     }
 
@@ -43,55 +43,65 @@ int parse_letstmt(uint64_t *p_index, Stmt *node) {
 
     LValue *lvalue_field = (LValue *) malloc(sizeof(LValue));
     if (!lvalue_field) MALLOC_FAILURE;
-
-    if (parse_lvalue(&index, lvalue_field) == EXIT_FAILURE) {
-        free(lvalue_field);
-        lvalue_field = NULL;
-    }
+    if (parse_lvalue(&index, lvalue_field) == EXIT_FAILURE)
+        goto letstmt_exit1;
     
     if (expect_token(index, EQUALS, NULL) == EXIT_FAILURE)
-        parse_error(MISSING_TOKEN, index, index, index+1, "=");
-    else ++index;
+        parse_error(MISSING_TOKEN, index, index, "=");
+    
+    ++index;
 
     Expr *expr_field = (Expr *) malloc(sizeof(Expr));
     if (!expr_field) MALLOC_FAILURE;
-    if (parse_expr(&index, expr_field) == EXIT_FAILURE) {
-        free(expr_field);
-        expr_field = NULL;
-    }
+    if (parse_expr(&index, expr_field) == EXIT_FAILURE) 
+        goto letstmt_exit2;
 
+    *p_index = index;
     node->type = LET_STMT;
     node->field1.lvalue = lvalue_field;
     node->field2.expr = expr_field;
-
-    *p_index = index;
     return EXIT_SUCCESS;
+
+letstmt_exit2:
+    free(expr_field);
+    free_lvalue(lvalue_field);
+letstmt_exit1:
+    free(lvalue_field);
+    *p_index = index;
+    return EXIT_FAILURE;
 }
 
 int parse_assertstmt(uint64_t *p_index, Stmt *node) {
     uint64_t index = *p_index;
-    char *string;
+    char* string;
 
     Expr *expr_field = (Expr *) malloc(sizeof(Expr));
     if (!expr_field) MALLOC_FAILURE;
-    if (parse_expr(&index, expr_field) == EXIT_FAILURE) {
-        free(expr_field);
-        expr_field = NULL;
-    }
+    if (parse_expr(&index, expr_field) == EXIT_FAILURE) 
+        goto assertstmt_exit1;
     
     if (expect_token(index, COMMA, NULL) == EXIT_FAILURE)
-        parse_error(MISSING_TOKEN, *p_index, index, index+1, ",");
+        parse_error(MISSING_TOKEN, *p_index, index, ",");
     else ++index;
 
-    if (expect_token(index, STRING, &string) == EXIT_FAILURE)
-        parse_error(MISSING_STRING, *p_index, index, index+1, NULL);
+    if (expect_token(index, STRING, &string) == EXIT_FAILURE) {
+        parse_error(MISSING_STRING, *p_index, index, NULL);
+        goto assertstmt_exit2;
+    }
     else ++index;
-    
+
+    *p_index = index;    
     node->type = ASSERT_STMT;
     node->field1.expr = expr_field;
     node->field2.string = string;
-    *p_index = index;
     return EXIT_SUCCESS;
+
+assertstmt_exit2:
+    free_expr(expr_field);
+assertstmt_exit1:
+    free(expr_field);
+    *p_index = index;
+    return EXIT_FAILURE;
 }
 
 int parse_returnstmt(uint64_t *p_index, Stmt *node) {
@@ -99,16 +109,38 @@ int parse_returnstmt(uint64_t *p_index, Stmt *node) {
 
     Expr *expr_field = (Expr *) malloc(sizeof(Expr));
     if (!expr_field) MALLOC_FAILURE;
-    if (parse_expr(&index, expr_field) == EXIT_FAILURE) {
-        free(expr_field);
-        expr_field = NULL;
-    }
-
+    if (parse_expr(&index, expr_field) == EXIT_FAILURE)
+        goto returnstmt_exit1;
+    
+    *p_index = index;
     node->type = RETURN_STMT;
     node->field1.expr = expr_field;
-    node->field2.string = NULL;
-    *p_index = index;
     return EXIT_SUCCESS;
+
+returnstmt_exit1:
+    free(expr_field);
+    *p_index = index;
+    return EXIT_FAILURE;
+}
+
+void free_stmt(Stmt* node) {
+    if (!node) return;
+    switch (node->type) {
+        case LET_STMT:
+            free_lvalue(node->field1.lvalue);
+            free_expr(node->field2.expr);
+            free(node->field1.lvalue);
+            free(node->field2.expr);
+            break;
+        case ASSERT_STMT:
+            free_expr(node->field1.expr);
+            free(node->field1.expr);
+            break;
+        case RETURN_STMT:
+            free_expr(node->field1.expr);
+            free(node->field1.expr);
+            break;
+    }
 }
 
 char *stmt_string(Stmt* node) {
@@ -136,25 +168,4 @@ char *stmt_string(Stmt* node) {
     }
 
     return output;
-}
-
-void free_stmt(Stmt* node) {
-    if (!node) return;
-    switch (node->type) {
-        case LET_STMT:
-            free_lvalue(node->field1.lvalue);
-            free_expr(node->field2.expr);
-            free(node->field1.lvalue);
-            free(node->field2.expr);
-            break;
-        case ASSERT_STMT:
-            free_expr(node->field1.expr);
-            free(node->field1.expr);
-            free(node->field2.string);
-            break;
-        case RETURN_STMT:
-            free_expr(node->field1.expr);
-            free(node->field1.expr);
-            break;
-    }
 }

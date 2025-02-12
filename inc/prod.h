@@ -188,6 +188,7 @@ char *cmd_struct_string(Cmd*);
 char *expr_string(Expr*);
 char *exprlist_string(Vector*);
 char *exprbind_string(Expr*);
+char *exprloop_string(Expr*);
 
 char *arg_string(Arg*);
 char *type_string(Type*);

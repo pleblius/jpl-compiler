@@ -1,4 +1,22 @@
-// ERROR
-
-show 3
-let
+let a = -1
+let b = 1 + 1
+let c = if true then 2 else 3
+let d = array[i : W] x
+let e = sum[j : U] y
+let f = 2 || 3
+let g = -1 - 1
+let h = -1 - a.a
+let i = 1 + 2 + 3 + 4 + 5 + 6
+let j = -a.a
+let k = 1 -2
+let l = 1 - -2
+let m = 1 + array[] x
+let o = ------1
+let p = 1 + a.x * 3 + 4
+let q = a.x + b.y * c.z + -d.a.b.c.d.e.f
+let r = 1 + 2 * 3 + 4
+let s = 1 + 2 * 3
+let t = array[i : W, j : V, k : U] x
+let u = array[] x
+let v = 1 + 2 * 3
+let w = ---1

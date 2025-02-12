@@ -14,62 +14,92 @@ extern Vector *token_list;
 
 int parse_lvalue(uint64_t *p_index, LValue *node) {
     uint64_t index = *p_index;
-    char *string;
-    int status = EXIT_SUCCESS;
+    char* string;
 
     if (expect_token(index, VARIABLE, &string) == EXIT_FAILURE) {
-        parse_error(MISSING_TOKEN, *p_index, index, index+1, "[variable]");
+        parse_error(INVALID_LVALUE, *p_index, index, NULL);
         return EXIT_FAILURE;
     }
-    else ++index;
+    
+    ++index;
     node->type = VAR_LVALUE;
-
+    node->field1.string = string;
+    
     if (peek_token(index) == LSQUARE) {
         ++index;
-        if (parse_arraylvalue(&index, node) == EXIT_FAILURE) {
-            return EXIT_FAILURE;
-        }
+
+        if (parse_arraylvalue(&index, node) == EXIT_FAILURE)
+            goto lvalue_exit1;
+        
+        ++index;
     }
 
-    node -> field1.string = string;
     *p_index = index;
-    return status;
+    node -> field1.string = string;
+    return EXIT_SUCCESS;
+
+lvalue_exit1:
+    free_lvalue(node);
+    *p_index = index;
+    return EXIT_FAILURE;
 }
 
 int parse_arraylvalue(uint64_t *p_index, LValue *node) {
     uint64_t index = *p_index;
-    char *string;
+    char* string;
+    int status = EXIT_SUCCESS;
 
     Vector *var_list = vector_create();
     if (!var_list) MALLOC_FAILURE;
 
-    TokenType type = peek_token(index);
-    if (type == RSQUARE) return EXIT_SUCCESS;
+    TokenType type;
 
     while (1) {
-        if (expect_token(index, VARIABLE, &string) == EXIT_FAILURE)
-            parse_error(MISSING_TOKEN, index, index, index+1, "[variable]");
+        type = peek_token(index);
+        if (type == RSQUARE) break;
+
+        if (expect_token(index, VARIABLE, &string) == EXIT_FAILURE) {
+            parse_error(MISSING_TOKEN, index, index, "[variable]");
+            status = EXIT_FAILURE;
+        }
         else ++index;
-        
+
         vector_append(var_list, string);
         
         type = peek_token(index);
+
         if (type == COMMA)
             ++index;
         else if (type == RSQUARE) {
-            ++index;
             break;
         }
-        else if (type != RSQUARE){
-            parse_error(MISSING_BRACKET, *p_index, index, index+1, NULL);
-            return EXIT_FAILURE;
+        else {
+            parse_error(UNEXPECTED_TOKEN, index, index, NULL);
+            break;
         }
     }
 
     *p_index = index;
+
+    if (status == EXIT_FAILURE) {
+        vector_destroy(var_list);
+        return EXIT_FAILURE;
+    }
+    
     node->type = ARRAY_LVALUE;
     node->field2.var_list = var_list;
     return EXIT_SUCCESS;
+}
+
+void free_lvalue(LValue* node) {
+    if (!node) return;
+    switch (node->type) {
+        case ARRAY_LVALUE:
+            vector_destroy(node->field2.var_list);
+            break;
+        case VAR_LVALUE:
+            break;
+    }
 }
 
 char *lvalue_string(LValue* node) {
@@ -96,7 +126,7 @@ char *lvaluelist_string(Vector *list) {
     char *temp1, *temp2;
     char *output = vector_get(list, 0);
 
-    for (int i = 1; i < list->size; ++i) {
+    for (size_t i = 1; i < list->size; ++i) {
         temp1 = vector_get(list, i);
         temp2 = output;
         output = string_combine(3, temp2, " ", temp1);
@@ -105,25 +135,4 @@ char *lvaluelist_string(Vector *list) {
     }
 
     return output;
-}
-
-void free_lvalue(LValue* node) {
-    if (!node) return;
-    switch (node->type) {
-        case ARRAY_LVALUE:
-            vector_destroy(node->field2.var_list);
-            free(node->field1.string);
-            break;
-        case VAR_LVALUE:
-            free(node->field1.string);
-    }
-}
-
-void free_lvaluelist(Vector *list) {
-    if (!list) return;
-    for (int i = 0; i < list->size; ++i) {
-        free( ((LValue *) vector_get(list, i)) -> field1.string);
-    }
-
-    vector_destroy(list);
 }

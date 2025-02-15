@@ -57,7 +57,7 @@ int parse_cmd(uint64_t* p_index, Cmd* node) {
 
 int parse_readcmd(uint64_t* p_index, Cmd* node) {
     uint64_t index = *p_index;
-    char* string;
+    StringRef string;
 
     ++index;
 
@@ -107,7 +107,7 @@ readcmd_exit1:
 
 int parse_writecmd(uint64_t *p_index, Cmd* node) {
     uint64_t index = *p_index;
-    char* string;
+    StringRef string;
 
     ++index;
 
@@ -190,7 +190,7 @@ letcmd_exit1:
 
 int parse_assertcmd(uint64_t *p_index, Cmd* node) {
     uint64_t index = *p_index;
-    char* string;
+    StringRef string;
 
     ++index;
 
@@ -233,7 +233,7 @@ assertcmd_exit1:
 
 int parse_printcmd(uint64_t *p_index, Cmd* node) {
     uint64_t index = *p_index;
-    char* string;
+    StringRef string;
 
     ++index;
 
@@ -296,7 +296,7 @@ timecmd_exit1:
 int parse_fncmd(uint64_t *p_index, Cmd *node) {
     uint64_t index = *p_index;
     uint64_t lparen_index = index;
-    char* string;
+    StringRef string;
 
     ++index;
 
@@ -477,7 +477,7 @@ int parse_fnstmts(uint64_t *p_index, Vector *list)  {
 
 int parse_structcmd(uint64_t *p_index, Cmd *node) {
     uint64_t index = *p_index;
-    char* string;
+    StringRef string;
 
     ++index;
 
@@ -535,7 +535,7 @@ structcmd_exit1:
 
 int parse_structmembers(uint64_t *p_index, Vector *variables, Vector *types) {
     uint64_t index = *p_index;
-    char* string;
+    StringRef string;
     int status = EXIT_SUCCESS;
     
     while (1) {
@@ -565,7 +565,7 @@ int parse_structmembers(uint64_t *p_index, Vector *variables, Vector *types) {
         }
         else ++index;
 
-        vector_append(variables, string);
+        vector_append(variables, array_from_ref(string));
         vector_append(types, type_field);
 
         if (peek_token(index) == RCURLY) break;
@@ -652,127 +652,4 @@ void free_types(Vector *list) {
     for (uint64_t i = 0; i < list->size; ++i) {
         free_type(vector_get(list, i));
     }
-}
-
-char *cmd_string(Cmd* node) {
-    const char *cmd_type = cmd_strings[node->type];
-    char *string1, *string2, *string3, *string4, *output = NULL;
-
-    switch (node->type) {
-        case READ_CMD:
-            string1 = node->field1.string;
-            string2 = lvalue_string(node->field2.lvalue); if (!string1 || !string2) return NULL;
-            output = string_combine(6, cmd_type, " ", string1, " ", string2, ")");
-            free(string2);
-            break;
-        case WRITE_CMD:
-            string1 = expr_string(node->field1.expr);
-            string2 = node->field2.string; if (!string1 || !string2) return NULL;
-            output = string_combine(6, cmd_type, " ", string1, " ", string2, ")");
-            free(string1);
-            break;
-        case LET_CMD:
-            string1 = lvalue_string(node->field1.lvalue);
-            string2 = expr_string(node->field2.expr); if (!string1 || !string2) return NULL;
-            output = string_combine(6, cmd_type, " ", string1, " ", string2, ")");
-            free(string1); free(string2);
-            break;
-        case ASSERT_CMD:
-            string1 = expr_string(node->field1.expr);
-            string2 = node->field2.string; if (!string1 || !string2) return NULL;
-            output = string_combine(6, cmd_type, " ", string1, " ", string2, ")");
-            free(string1);
-            break;
-        case PRINT_CMD:
-            string1 = node->field1.string; if (!string1) return NULL;
-            output = string_combine(4, cmd_type, " ", string1, ")");
-            break;
-        case SHOW_CMD:
-            string1 = expr_string(node->field1.expr); if (!string1) return NULL;
-            output = string_combine(4, cmd_type, " ", string1, ")");
-            free(string1);
-            break;
-        case TIME_CMD:
-            string1 = cmd_string(node->field1.cmd); if (!string1) return NULL;
-            output = string_combine(4, cmd_type, " ", string1, ")");
-            free(string1);
-            break;
-        case FN_CMD:
-            string1 = node->field1.string;
-            string2 = cmd_bind_string(node);
-            string3 = type_string(node->field3.type);
-            string4 = cmd_stmt_string(node);
-            output = string_combine(9, cmd_type, " ", string1, " (", string2, ") ", string3, string4, ")");
-            free(string2); free(string3); free(string4);
-            break;
-        case STRUCT_CMD:
-            string1 = node->field1.string;
-            string2 = cmd_struct_string(node);
-            if (strlen(string2) == 0) output = string_combine(4, cmd_type, " ", string1, ")");
-            else output = string_combine(6, cmd_type, " ", string1, " ", string2, ")");
-            free(string2);
-            break;
-    }
-
-    return output;
-}
-char *cmd_bind_string(Cmd *node) {
-    char *temp1, *temp2;
-    Vector *list = node -> field2.binds;
-    if (list->size == 0) {
-        return string_combine(1, "()");
-    }
-    char *output = bind_string(vector_get(list, 0));
-
-    for (size_t i = 1; i < list->size; ++i) {
-        temp1 = bind_string(vector_get(list, i));
-        temp2 = output;
-        output = string_combine(3, temp2, " ", temp1);
-        free(temp1);
-        free(temp2);
-    }
-
-    temp1 = output;
-    output = string_combine(3, "(", temp1, ")");
-    free(temp1);
-
-    return output;
-}
-char *cmd_stmt_string(Cmd *node) {
-    char *temp1, *temp2;
-    Vector *list = node -> field4.stmts;
-    if (list->size == 0) return calloc(1,1);
-    char *output = stmt_string(vector_get(list, 0));
-
-    for (size_t i = 1; i < list->size; ++i) {
-        temp1 = stmt_string(vector_get(list, i));
-        temp2 = output;
-        output = string_combine(3, temp2, " ", temp1);
-        free(temp1);
-        free(temp2);
-    }
-
-    temp1 = output;
-    output = string_combine(2, " ", temp1);
-    free(temp1);
-    return output;
-}
-char *cmd_struct_string(Cmd *node) {
-    char *temp1, *temp2;
-    Vector *var_list = node->field2.vars;
-    Vector *type_list = node->field3.types;
-    if (var_list->size == 0) return calloc(1,1);
-    temp1 = vector_get(var_list, 0);
-    temp2 = type_string(vector_get(type_list, 0));
-    char *output = string_combine(3, temp1, " ", temp2);
-    free(temp2);
-
-    for (size_t i = 1; i < var_list->size; ++i) {
-        temp1 = type_string(vector_get(type_list, i));
-        temp2 = output;
-        output = string_combine(5, temp2, " ", vector_get(var_list,i), " ", temp1);
-        free(temp1); free(temp2);
-    }
-
-    return output;
 }

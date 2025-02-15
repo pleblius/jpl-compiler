@@ -14,7 +14,7 @@ extern Vector *token_list;
 
 int parse_lvalue(uint64_t *p_index, LValue *node) {
     uint64_t index = *p_index;
-    char* string;
+    StringRef string;
 
     if (expect_token(index, VARIABLE, &string) == EXIT_FAILURE) {
         parse_error(INVALID_LVALUE, *p_index, index, NULL);
@@ -46,7 +46,7 @@ lvalue_exit1:
 
 int parse_arraylvalue(uint64_t *p_index, LValue *node) {
     uint64_t index = *p_index;
-    char* string;
+    StringRef string;
     int status = EXIT_SUCCESS;
 
     Vector *var_list = vector_create();
@@ -64,7 +64,7 @@ int parse_arraylvalue(uint64_t *p_index, LValue *node) {
         }
         else ++index;
 
-        vector_append(var_list, string);
+        vector_append(var_list, array_from_ref(string));
         
         type = peek_token(index);
 
@@ -100,39 +100,4 @@ void free_lvalue(LValue* node) {
         case VAR_LVALUE:
             break;
     }
-}
-
-char *lvalue_string(LValue* node) {
-    const char *lvalue_type = lvalue_strings[node->type];
-    char *string1, *string2, *output = NULL;
-
-    switch (node->type) {
-        case ARRAY_LVALUE:
-            string1 = node->field1.string;
-            string2 = lvaluelist_string(node->field2.var_list);
-            output = string_combine(6, lvalue_type, " ", string1, " ", string2, ")");
-            free(string2);
-            break;      
-        case VAR_LVALUE:
-            string1 = node->field1.string;
-            output = string_combine(4, lvalue_type, " ", string1, ")");
-            break;
-    }
-
-    return output;
-}
-
-char *lvaluelist_string(Vector *list) {
-    char *temp1, *temp2;
-    char *output = vector_get(list, 0);
-
-    for (size_t i = 1; i < list->size; ++i) {
-        temp1 = vector_get(list, i);
-        temp2 = output;
-        output = string_combine(3, temp2, " ", temp1);
-        free(temp1);
-        free(temp2);
-    }
-
-    return output;
 }

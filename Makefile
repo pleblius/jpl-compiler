@@ -45,6 +45,7 @@ clean:
 	@rm -f callgrind.*
 	@rm -rf *.out
 	@rm -rf *.s
+	@find . -name "*.Identifier" -type f -delete
 
 run: $(EXE)
 	@./$(EXE) $(FLAGS) $(TEST)

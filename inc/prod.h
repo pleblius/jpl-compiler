@@ -20,13 +20,13 @@ typedef enum { VAR_BIND } BindType;
 
 typedef struct {
     ArgType type;
-    char *string;
+    StringRef string;
 } Arg;
 
 typedef struct {
     LValueType type;
     union {
-        char *string;
+        StringRef string;
     } field1;
 
     union {
@@ -36,9 +36,10 @@ typedef struct {
 
 typedef struct Type {
     TypeType type;
+    uint64_t loc;
     
     union {
-        char *string;
+        StringRef string;
         struct Type *type;
     } field1;
 
@@ -57,14 +58,14 @@ typedef struct Expr {
     union {
         int64_t int_value;
         double float_value;
-        char *string;
+        StringRef string;
         struct Expr *expr;
         Vector *expr_list;
         Vector *var_list;
     } field1;
     
     union {
-        char *string;
+        StringRef string;
         Vector *expr_list;
         struct Expr *expr;
     } field2;
@@ -77,14 +78,14 @@ typedef struct Expr {
 typedef struct Cmd {
     CmdType type;
     union {
-        char *string;
+        StringRef string;
         struct Cmd *cmd;
         Expr *expr;
         LValue *lvalue;
     } field1;
 
     union {
-        char *string;
+        StringRef string;
         Expr *expr;
         LValue *lvalue;
         Vector *binds;
@@ -111,7 +112,7 @@ typedef struct {
 
     union {
         Expr *expr;
-        char *string;
+        StringRef string;
     } field2;
 } Stmt;
 
@@ -157,7 +158,7 @@ int parse_ifthenexpr(uint64_t*, Expr*);
 int parse_unopexpr(uint64_t*, Expr*);
 int is_prefix(uint64_t);
 int is_postfix(uint64_t);
-int is_binop(uint64_t, char**);
+int is_binop(uint64_t, StringRef*);
 uint32_t get_precedence(char*);
 int parse_loopbinds(uint64_t*, Vector*, Vector*);
 int parse_exprlist(uint64_t*, Vector*, TokenType);
@@ -180,23 +181,7 @@ int parse_letstmt(uint64_t*, Stmt*);
 int parse_assertstmt(uint64_t*, Stmt*);
 int parse_returnstmt(uint64_t*, Stmt*);
 
-char *cmd_string(Cmd*);
-char *cmd_stmt_string(Cmd*);
-char *cmd_bind_string(Cmd*);
-char *cmd_struct_string(Cmd*);
-
-char *expr_string(Expr*);
-char *exprlist_string(Vector*);
-char *exprbind_string(Expr*);
-char *exprloop_string(Expr*);
-
-char *arg_string(Arg*);
 char *type_string(Type*);
-char *bind_string(Bind*);
-char *stmt_string(Stmt*);
-
-char *lvalue_string(LValue*);
-char *lvaluelist_string(Vector*);
 
 void free_cmd(Cmd*);
 void free_statements(Vector*);

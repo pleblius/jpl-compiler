@@ -45,8 +45,24 @@ typedef enum {
     VOID,
     WRITE,
     COMMENT,
+    // Meta tokens
     INVALID,
-    ILLEGAL
+    ILLEGAL,
+    CMD,
+    EXPR,
+    LVALUE,
+    ARG,
+    STMT,
+    TYPE,
+    BIND,
+    STMTS,
+    BINDS,
+    STRUCTBINDS,
+    EXPRS,
+    LOOPBINDS,
+    VARIABLES,
+    COMMAS,
+    END
 } TokenType;
 
 typedef struct {
@@ -56,5 +72,5 @@ typedef struct {
 } Token;
 
 void print_token(Token*);
-Token *create_token(TokenType, size_t, size_t, char*);
+Token create_token(TokenType, size_t, size_t, char*);
 #endif // TOKEN_H

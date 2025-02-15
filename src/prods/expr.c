@@ -33,7 +33,7 @@ const char *pr1[] = {"array", "sum", "if"};
 const char *unops[] = { "-", "!" };
 #define NUM_UNOPS 2
 
-extern Vector *token_list;
+extern TokenVec *token_vec;
 
 int parse_expr(uint64_t *p_index, Expr* node) {
     if (parse_expr_literal(p_index, node) == EXIT_FAILURE) return EXIT_FAILURE;
@@ -114,18 +114,22 @@ exprliteral_exit1:
 
 int parse_intexpr(uint64_t *p_index, Expr* node) {
     uint64_t index = *p_index;
+    StringRef ref;
     char *string = NULL;
     char *end;
     uint64_t intval = 0;
 
-    if (expect_token(index, INTVAL, &string) == EXIT_FAILURE)
+    if (expect_token(index, INTVAL, &ref) == EXIT_FAILURE)
         parse_error(MISSING_TOKEN, *p_index, index, "[intval]");
     else {
+        string = array_from_ref(ref);
         intval = strtol(string, &end, 10);
         free(string);
         ++index;
-        if (errno == ERANGE)
+        if (errno == ERANGE) {
             parse_error(INT_RANGE, *p_index, index, NULL);
+            set_fail(EXIT_FAILURE);
+        }
     }
     
     node -> type = INT_EXPR;
@@ -135,17 +139,21 @@ int parse_intexpr(uint64_t *p_index, Expr* node) {
 }
 int parse_floatexpr(uint64_t *p_index, Expr* node) {
     uint64_t index = *p_index;
+    StringRef ref;
     char *string = NULL;
     char *end;
     double floatval = 0.0;
 
-    if (expect_token(index, FLOATVAL, &string) == EXIT_FAILURE)
+    if (expect_token(index, FLOATVAL, &ref) == EXIT_FAILURE)
         parse_error(MISSING_TOKEN, *p_index, index, "[floatval]");
     else {
+        string = array_from_ref(ref);
         floatval = strtod(string, &end);
         free(string);
-        if (errno == ERANGE)
+        if (errno == ERANGE) {
             parse_error(FLOAT_RANGE, *p_index, index, NULL);
+            set_fail(EXIT_FAILURE);
+        }
         ++index;
     }
 
@@ -199,7 +207,7 @@ arraylit_exit1:
 
 int parse_varexpr(uint64_t *p_index, Expr *node) {
     uint64_t index = *p_index;
-    char* string;
+    StringRef string;
 
     if (expect_token(index, VARIABLE, &string) == EXIT_FAILURE) {
         parse_error(MISSING_TOKEN, *p_index, index, "[variable]");
@@ -313,7 +321,7 @@ indexexpr_exit1:
 
 int parse_dotexpr(uint64_t *p_index, Expr *node) {
     uint64_t index = *p_index;
-    char* string;
+    StringRef string;
 
     ++index;
 
@@ -541,7 +549,7 @@ ifthen_exit1:
 
 int parse_unopexpr(uint64_t *p_index, Expr *node) {
     uint64_t index = *p_index;
-    char* string;
+    StringRef string;
     Expr *expr_field = NULL;
 
     expect_token(index, OP, &string);
@@ -565,14 +573,17 @@ unopexpr_exit1:
 int parse_binopexpr(uint64_t *p_index, Expr *node, uint32_t min_precedence) {
     uint64_t index = *p_index;
     uint32_t precedence = 0;
+    StringRef token_string;
     char *string;
     Expr *right_node = NULL;
     Expr *new_left = NULL;
 
-    while (expect_token(index, OP, &string) == EXIT_SUCCESS) {
+    while (peek_token(index) == OP) {
+        expect_token(index, OP, &token_string);
+        string = array_from_ref(token_string);
         precedence = get_precedence(string);
+        free(string);
         if (precedence < min_precedence) {
-            free(string);
             break;
         }
         ++index;
@@ -587,7 +598,7 @@ int parse_binopexpr(uint64_t *p_index, Expr *node, uint32_t min_precedence) {
         
         memcpy(new_left, node, sizeof(Expr));
         node->type = BINOP_EXPR;
-        node->field1.string = string;
+        node->field1.string = token_string;
         node->field2.expr = new_left;
         node->field3.expr = right_node;
     }
@@ -617,7 +628,7 @@ int parse_postfixexpr(uint64_t *p_index, Expr *node) {
 
 int parse_loopbinds(uint64_t *p_index, Vector *vars, Vector *exprs) {
     uint64_t index = *p_index;
-    char* string;
+    StringRef string;
     int status = EXIT_SUCCESS;
     
     while (1) {
@@ -641,7 +652,7 @@ int parse_loopbinds(uint64_t *p_index, Vector *vars, Vector *exprs) {
         if(parse_expr(&index, expr_field) == EXIT_FAILURE)
             goto structloop2;
 
-        vector_append(vars, string);
+        vector_append(vars, array_from_ref(string));
         vector_append(exprs, expr_field);
 
         if (peek_token(index) == RSQUARE) break;
@@ -673,24 +684,24 @@ int parse_loopbinds(uint64_t *p_index, Vector *vars, Vector *exprs) {
 }
 
 int is_prefix(uint64_t index) {
-    Token *token = vector_get(token_list, index);
-    return token->strref.length == 1 && (token->strref.string[0] == '-' || token->strref.string[0] == '!');
+    Token token = tokenvec_get(token_vec, index);
+    return token.strref.length == 1 && (token.strref.string[0] == '-' || token.strref.string[0] == '!');
 }
 
 int is_postfix(uint64_t index) {
-    Token *token = vector_get(token_list, index);
+    Token token = tokenvec_get(token_vec, index);
 
-    return token->type == LSQUARE || token->type == DOT;
+    return token.type == LSQUARE || token.type == DOT;
 }
 
-int is_binop(uint64_t index, char* *output) {
-    Token *token = vector_get(token_list, index);
+int is_binop(uint64_t index, StringRef *output) {
+    Token token = tokenvec_get(token_vec, index);
 
-    char *string = array_from_ref(token->strref);
+    char *string = array_from_ref(token.strref);
 
     for (int i = 0; i < NUM_BINOPS; ++i)
         if (!strcmp(string, binops[i])) {
-            *output = array_from_ref(token->strref);
+            *output = token.strref;
             free(string);
             return 1;
         }
@@ -776,126 +787,4 @@ void free_exprlist(Vector *list) {
         Expr *ptr = vector_get(list, i);
         free_expr(ptr);
     }
-}
-
-char *expr_string(Expr* node) {
-    const char *expr_type = expr_strings[node->type];
-    char *string1, *string2, *string3, *output = NULL;
-
-    int rem;
-    
-    switch (node->type) {
-        case INT_EXPR:
-            string1 = malloc(MAXIMUM_BUFFER); if (!string1) return NULL;
-            rem = snprintf(string1, MAXIMUM_BUFFER, "%ld", node->field1.int_value); if (rem < 0) fprintf(stderr, "Buffer error.\n");
-            output = string_combine(4, expr_type, " ", string1, ")");
-            free(string1);
-            break;
-        case FLOAT_EXPR:
-            string1 = malloc(MAXIMUM_BUFFER); if (!string1) return NULL;
-            rem = snprintf(string1, MAXIMUM_BUFFER, "%ld", (uint64_t)node->field1.float_value); if (rem < 0) fprintf(stderr, "Buffer error.\n");
-            output = string_combine(4, expr_type, " ", string1, ")");
-            free(string1);
-            break;
-        case FALSE_EXPR:
-        case VOID_EXPR:
-        case TRUE_EXPR:
-            output = string_combine(2, expr_type, ")");
-            break;
-        case VAR_EXPR:
-            output = string_combine(4, expr_type, " ", node->field1.string, ")");
-            break;
-        case ARRAY_EXPR:
-            string1 = exprlist_string(node->field1.expr_list);
-            if (strlen(string1) == 0) output = string_combine(2, expr_type, ")");
-            else output = string_combine(4, expr_type, " ", string1, ")");
-            free(string1);
-            break;
-        case DOT_EXPR:
-            string1 = expr_string(node->field1.expr);
-            string2 = node->field2.string;
-            output = string_combine(6, expr_type, " ", string1, " ", string2, ")");
-            free(string1);
-            break;
-        case ARRAYINDEX_EXPR:
-            string1 = expr_string(node->field1.expr);
-            string2 = exprlist_string(node->field2.expr_list);
-            if (strlen(string2) == 0) output = string_combine(4, expr_type, " ", string1, ")");
-            else output = string_combine(6, expr_type, " ", string1, " ", string2, ")");
-            free(string1); free(string2);
-            break;
-        case STRUCTLITERAL_EXPR:
-            string1 = node->field1.string;
-            string2 = exprlist_string(node->field2.expr_list);
-            if (strlen(string2) == 0) output = string_combine(4, expr_type, " ", string1, ")");
-            else output = string_combine(6, expr_type, " ", string1, " ", string2, ")");
-            free(string2);
-            break;
-        case CALL_EXPR:
-            string1 = node->field1.string;
-            string2 = exprlist_string(node->field2.expr_list);
-            if (strlen(string2) == 0) output = string_combine(4, expr_type, " ", string1, ")");
-            else output = string_combine(6, expr_type, " ", string1, " ", string2, ")");
-            free(string2);
-            break;
-        case BINOP_EXPR:
-            string1 = node->field1.string;
-            string2 = expr_string(node->field2.expr);
-            string3 = expr_string(node->field3.expr);
-            output = string_combine(8, expr_type, " ", string2, " ", string1, " ", string3, ")");
-            free(string2); free(string3);
-            break;
-        case UNOP_EXPR:
-            string1 = node->field1.string;
-            string2 = expr_string(node->field2.expr);
-            output = string_combine(6, expr_type, " ", string1, " ", string2, ")");
-            free(string2);
-            break;
-        case IF_EXPR:
-            string1 = expr_string(node->field1.expr);
-            string2 = expr_string(node->field2.expr);
-            string3 = expr_string(node->field3.expr);
-            output = string_combine(8, expr_type, " ", string1, " ", string2, " ", string3, ")");
-            free(string1); free(string2); free(string3);
-            break;
-        case ARRAY_LOOP_EXPR:
-        case SUM_LOOP_EXPR:
-            string1 = exprloop_string(node);
-            string2 = expr_string(node->field3.expr);
-            if (strlen(string1) == 0) output = string_combine(4, expr_type, " ", string2, ")");
-            else output = string_combine(6, expr_type, " ", string1, " ", string2, ")");
-            break;
-        default:
-            return "NULL";
-    }
-    return output;
-}
-char *exprlist_string(Vector *list) {
-    char *temp1, *temp2;
-    if (list->size == 0) return calloc(1,1);
-    char *output = expr_string(vector_get(list, 0));
-
-    for (size_t i = 1; i < list->size; ++i) {
-        temp1 = expr_string(vector_get(list, i));
-        temp2 = output;
-        output = string_combine(3, temp2, " ", temp1);
-        free(temp1);
-        free(temp2);
-    }
-
-    return output;
-}
-char *exprloop_string(Expr *node) {
-    char *temp1, *temp2;
-    Vector *vars = node->field1.var_list;
-    Vector *exprs = node->field2.expr_list;
-    if (vars->size == 0) return calloc(1,1);
-    char *output = string_combine(3, vector_get(vars, 0), " ", expr_string(vector_get(exprs, 0)));
-    for (size_t i = 1; i < vars->size; ++i) {
-        temp1 = expr_string(vector_get(exprs, i));
-        temp2 = output;
-        output = string_combine(4, " ", temp2, " ", temp1);
-        free(temp1); free(temp2);
-    }
-    return output;
 }

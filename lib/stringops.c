@@ -49,7 +49,7 @@ String *string_from_array(char *p_c) {
     string -> length = strlen(p_c);
 
     string->string = (char *) malloc(string->length + 1);
-    strcpy(string->string, p_c);
+    strncpy(string->string, p_c, string->length+1);
 
     return string;
 }
@@ -59,10 +59,10 @@ String *string_from_ref (StringRef strref) {
     if (!string) return NULL;
 
     string->length = strref.length;
-    string->string = (char *) malloc(string->length);
+    string->string = (char *) malloc(string->length+1);
     if (!string->string) return NULL;
     strncpy(string->string, strref.string, strref.length);
-
+    string->string[string->length] = '\0';
     return string;
 }
 // Generates a reference to [start, end) of the given array.

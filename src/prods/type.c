@@ -10,7 +10,7 @@
 
 const char *type_strings[] = { "(IntType", "(FloatType", "(BoolType", "(ArrayType", "(VoidType", "(StructType" };
 
-extern Vector *token_list;
+extern TokenVec *token_vec;
 
 int parse_type(uint64_t *p_index, Type *node) {
     uint64_t index = *p_index;
@@ -32,7 +32,7 @@ int parse_type(uint64_t *p_index, Type *node) {
             break;
         case VARIABLE:
             node->type = STRUCT_TYPE;
-            node->field1.string = array_from_ref(((Token *)vector_get(token_list, index))->strref);
+            node->field1.string = tokenvec_get(token_vec, index).strref;
             break;
         default:
             parse_error(INVALID_TYPE, *p_index, index, NULL);
@@ -91,30 +91,39 @@ void free_type(Type* node){
     }
 }
 
-char *type_string(Type* node) {
-    const char *type_type = type_strings[node->type];
-    char *string1, *string2, *output = NULL;
-    int rem;
-
-    switch (node->type) {
-        case INT_TYPE:
+char *type_string(Type *node) {
+    char *string;
+    switch(node->type) {
         case FLOAT_TYPE:
-        case BOOL_TYPE:
-        case VOID_TYPE:
-            output = string_combine(2, type_type, ")");
+            string = malloc(6);
+            strcpy(string, "float");
             break;
-        case STRUCT_TYPE:
-            string1 = node->field1.string;
-            output = string_combine(4, type_type, " ", string1, ")");
-            free(string1);
+        case INT_TYPE:
+            string = malloc(4);
+            strcpy(string, "int");
             break;
         case ARRAY_TYPE:
-            string2 = (char*) malloc(MAXIMUM_BUFFER); if (!string2) fprintf(stderr, "Buffer error.\n");;
-            string1 = type_string(node->field1.type);
-            rem = snprintf(string2, MAXIMUM_BUFFER, "%d", node->comma_count); if (rem < 0) fprintf(stderr, "Buffer error.\n");
-            output = string_combine(6, type_type, " ", string1, " ", string2, ")");
-            free(string1); free(string2);
+            string = string_combine(2, type_string(node->field1.type), " array [");
+            for (size_t i = 0; i < node->comma_count; ++i) {
+                string = string_combine(2, string, ",");
+            }
+            string = string_combine(2, string, "]");
+            break;
+        case VOID_TYPE:
+            string = malloc(5);
+            strcpy(string, "void");
+            break;
+        case BOOL_TYPE:
+            string = malloc(5);
+            strcpy(string, "bool");
+            break;
+        case STRUCT_TYPE:
+            string = string_combine(2, "struct ", node->field1.string);
+            break;
+        default:
+            string = calloc(1,1);
+            break;
     }
 
-    return output;
+    return string;
 }

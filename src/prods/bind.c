@@ -49,14 +49,3 @@ void free_bind(Bind* node) {
     free(node->field1);
     free(node->field2);
 }
-
-char *bind_string(Bind* node) {
-    const char *bind_type = bind_strings[node->type];
-    char *string1, *string2, *output = NULL;
-
-    string1 = lvalue_string(node->field1);
-    string2 = type_string(node->field2);
-    output = string_combine(5, bind_type, string1, " ", string2, "");
-    free(string1); free(string2);
-    return output;
-}

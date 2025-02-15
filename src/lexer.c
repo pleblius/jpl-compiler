@@ -6,8 +6,9 @@
 #include "lexer.h"
 #include "error.h"
 #include "stringops.h"
+#include "vecs.h"
 
-extern Vector *token_list;
+extern TokenVec *token_vec;
 extern FILE* file_ptr;
 extern char* file_string;
 extern Vector *error_list;
@@ -22,7 +23,7 @@ int lex() {
     char *pc = file_string;
     TokenType type = INVALID;
     size_t count = 1;
-    size_t byte = 1;
+    size_t byte = 0;
     size_t token_index = 0;
 
     while (1) {
@@ -42,7 +43,7 @@ int lex() {
             count = 1;
 
             // Consolidate newlines into a single token
-            if (vector_peek_last(token_list) != NULL && ((Token *) vector_peek_last(token_list))->type == NEWLINE) {
+            if (!tokenvec_is_empty(token_vec) && tokenvec_peek_last(token_vec).type ==  NEWLINE) {
                 pc += count;
                 byte += count;
                 continue;
@@ -100,15 +101,14 @@ int lex() {
             lex_error(ILLEGAL_CHARACTER, token_index, token_index, NULL);
         }
 
-        Token *token = create_token(type, byte, count, pc);
-        vector_append(token_list, token);
+        tokenvec_append(token_vec, create_token(type, byte, count, pc));
         ++token_index;
 
         pc += count;
         byte += count;
     }
 
-    vector_append(token_list, create_token(END_OF_FILE, byte, 1, pc));
+    tokenvec_append(token_vec, create_token(END_OF_FILE, byte, 1, pc));
     
     if (error_list == NULL) return EXIT_SUCCESS;
 
@@ -308,21 +308,12 @@ TokenType lex_comment(char *pc, unsigned long *count) {
     return type;
 }
 
-// Prints the successfully lexed file's tokens.
-void lex_print_output() {
-    for (size_t i = 0; i < vector_size(token_list); ++i) {
-        print_token(vector_get(token_list, i));
-    }
-
-    printf("Compilation succeeded: lexical analysis complete.\n");
-}
-
 TokenType match_keyword(char *pc, size_t count) {
     TokenType type;
     char string[count+1];
     strncpy(string, pc, count);
     string[count] = '\0';
-    for (int i = 0; i < NUM_KEYWORDS; ++i) {
+    for (size_t i = 0; i < NUM_KEYWORDS; ++i) {
         if (!strcmp(string, keyword_list[i])) {
             type = lex_keyword_match(i);
             break;

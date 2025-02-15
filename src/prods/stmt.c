@@ -73,7 +73,7 @@ letstmt_exit1:
 
 int parse_assertstmt(uint64_t *p_index, Stmt *node) {
     uint64_t index = *p_index;
-    char* string;
+    StringRef string;
 
     Expr *expr_field = (Expr *) malloc(sizeof(Expr));
     if (!expr_field) MALLOC_FAILURE;
@@ -141,31 +141,4 @@ void free_stmt(Stmt* node) {
             free(node->field1.expr);
             break;
     }
-}
-
-char *stmt_string(Stmt* node) {
-    const char *stmt_type = stmt_strings[node->type];
-    char *string1, *string2, *output = NULL;
-
-    switch (node->type) {
-        case LET_STMT:
-            string1 = lvalue_string(node->field1.lvalue);
-            string2 = expr_string(node->field2.expr);
-            output = string_combine(6, stmt_type, " ", string1, " ", string2, ")");
-            free(string1); free(string2);
-            break;
-        case ASSERT_STMT:
-            string1 = expr_string(node->field1.expr);
-            string2 = node->field2.string;
-            output = string_combine(6, stmt_type, " ", string1, " ", string2, ")");
-            free(string1);
-            break;
-        case RETURN_STMT:
-            string1 = expr_string(node->field1.expr);
-            output = string_combine(4, stmt_type, " ", string1, ")");
-            free(string1);
-            break;
-    }
-
-    return output;
 }

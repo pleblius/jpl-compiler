@@ -1,103 +1,81 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include <stdint.h>
 #include <string.h>
-#include <errno.h>
 
 #include "parser.h"
 #include "error.h"
 #include "stringops.h"
-#include "prod.h"
 
-extern Vector *token_list;
-extern Vector *error_list;
-Vector *command_list;
+extern Vector *command_list;
+static TokenVec *token_vec;
+int fail_status = EXIT_SUCCESS;
 
-int parse() {
+int parse(TokenVec *vector) {
+    if (!vector) return EXIT_FAILURE;
+
     uint64_t index = 0;
-    size_t size = token_list -> size;
+    token_vec = vector;
+    size_t size = vector -> size;
     TokenType type;
 
-    command_list = vector_create();
+    command_list = vector_create_cap(size/2);
     if (!command_list) MALLOC_FAILURE;
 
     while (index < size) {
-        uint64_t start_index = index;
         type = peek_token(index);
 
         while (type == NEWLINE) {
-            ++index;
-            type = peek_token(index);
+            type = peek_token(++index);
         }
 
         if (type == END_OF_FILE)
             break;
 
-        Cmd *node = (Cmd *) malloc(sizeof(Cmd));
-        if (!node) MALLOC_FAILURE;
+        Cmd *node = malloc(sizeof(Cmd));
 
         if (parse_cmd(&index, node) == EXIT_FAILURE) {
-            free(node);
-            node = NULL;
+            fail_status = EXIT_FAILURE;
 
             while (peek_token(index) != NEWLINE && peek_token(index) != END_OF_FILE) {
                 ++index;
             }
-            continue;
         }
 
         if (expect_token(index, NEWLINE, NULL) == EXIT_FAILURE) {
-            parse_error(MISSING_NEWLINE, start_index, index, NULL);
+            fail_status = EXIT_FAILURE;
 
             while (peek_token(index) != NEWLINE && peek_token(index) != END_OF_FILE) {
                 ++index;
             }
         }
-        ++index;
+        else ++index;
 
         vector_append(command_list, node);
     }
 
-    if (error_list == NULL) return EXIT_SUCCESS;
-
-    return EXIT_FAILURE;
+    return fail_status;
 }
 
 TokenType peek_token(uint64_t index) {
-    return ((Token *) vector_get(token_list, index)) -> type;
+    if (index >= tokenvec_size(token_vec)) return INVALID;
+    return tokenvec_get(token_vec, index).type;
 }
 
-int expect_token(uint64_t index, TokenType type, char **p_string) {
-    Token *token = vector_get(token_list, index);
+int expect_token(uint64_t index, TokenType type, StringRef *string) {
+    if (index >= tokenvec_size(token_vec)) return EXIT_FAILURE;
 
-    if (token->type != type) return EXIT_FAILURE;
-
-    if (p_string != NULL)
-        *p_string = array_from_ref(token->strref);
+    Token token = tokenvec_get(token_vec, index);
+    if (token.type != type) {
+        parse_error(UNEXPECTED_TOKEN, index, index, NULL);
+        set_fail(EXIT_FAILURE);
+        return EXIT_FAILURE;
+    }
     
+    if (string != NULL)
+        *string = token.strref;
     return EXIT_SUCCESS;
 }
 
-void parse_print_output() {
-    char *print_string;
-
-    for (size_t i = 0; i < command_list->size; ++i) {
-        print_string = cmd_string(vector_get(command_list, i));
-        
-        printf("%s\n", print_string);
-
-        free(print_string);
-    }
-
-    printf("Compilation succeeded.\n");
+void set_fail(int status) {
+    fail_status = status;
 }
-
-void free_command_list() {
-    if (!command_list) return;
-    for (size_t i = 0; i < command_list -> size; ++i) {
-        free_cmd(vector_get(command_list, i));
-    }
-
-    vector_destroy(command_list);
-}
-

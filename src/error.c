@@ -5,14 +5,17 @@
 #include "error.h"
 #include "stringops.h"
 #include "vector.h"
+#include "vecs.h"
+#include "dict.h"
 
 #define MAXIMUM_BUFFER 1024
 #define OUTPUT stdout
 
 Vector *error_list;
 extern size_t file_size;
-extern Vector *token_list;
+extern TokenVec *token_vec;
 extern char *file_string;
+extern TypeDict *type_dict;
 
 void program_error(char *file_name) {
     size_t line;
@@ -20,15 +23,15 @@ void program_error(char *file_name) {
 
     for (size_t i = 0; i < error_list->size; ++i) {
         ErrorStruct *error = vector_get(error_list, i);
-        Token *error_token = vector_get(token_list, error->error);
-        Token *start_token = vector_get(token_list, error->start);
+        Token error_token = tokenvec_get(token_vec, error->error);
+        Token start_token = tokenvec_get(token_vec, error->start);
 
-        get_loc(error_token->byte, file_string, &line, &col);
+        get_loc(error_token.byte, file_string, &line, &col);
 
-        print_error_desc(file_name, error, token_list, line, col);
+        print_error_desc(file_name, error, token_vec, line, col);
         
-        if (error->type != LEX_ERROR || error->subtype.lex_error != ILLEGAL_CHARACTER)
-        print_error_line(file_string, start_token->byte, error_token->byte, line, error);
+        if ((error->type != LEX_ERROR || error->subtype.lex_error != ILLEGAL_CHARACTER) && error->type != TYPE_ERROR)
+            print_error_line(file_string, start_token.byte, error_token.byte, line, error);
     }
 
     fprintf(OUTPUT, "\nCompilation failed\n");
@@ -68,27 +71,47 @@ void lex_error(LexErrorType subtype, size_t start_index, size_t error_index, cha
     }
     vector_append(error_list, error);
 }
+void type_error(TypeErrorType subtype, size_t first_index, size_t error_index) {
+    ErrorStruct *error = malloc(sizeof(ErrorStruct));
+    if (!error) exit(EXIT_FAILURE);
 
-void print_error_desc(char *file_name, ErrorStruct *error, Vector *token_list, size_t line, size_t col) {
+    error->start = first_index;
+    error->error = error_index;
+    error->type = TYPE_ERROR;
+    error->subtype.type_error = subtype;
+
+    if (!error_list) {
+        error_list = vector_create();
+        if (!error_list) exit(EXIT_FAILURE);
+    }
+    vector_append(error_list, error);
+}
+
+void print_error_desc(char *file_name, ErrorStruct *error, TokenVec *vector, size_t line, size_t col) {
     switch(error->type) {
         case PARSE_ERROR:
             fprintf(OUTPUT, "\nParsing error at %s:%ld:%ld\n\t", file_name, line, col);
 
-            print_parse_error_desc(error, token_list);
+            print_parse_error_desc(error, vector);
             break;
         case LEX_ERROR:
             fprintf(OUTPUT, "\nLexing error at %s:%ld:%ld\n\t", file_name, line, col);
 
-            print_lex_error_desc(error, token_list);
+            print_lex_error_desc(error, vector);
+            break;
+        case TYPE_ERROR:
+            fprintf(OUTPUT, "\nType-check error at %s:%ld%ld\n\t", file_name, line, col);
+            
+            print_type_error_desc(error, vector);
             break;
     }
 }
 
-void print_parse_error_desc(ErrorStruct *error, Vector *token_list) {
-    Token *start_token = vector_get(token_list, error->start);
-    Token *error_token = vector_get(token_list, error->error);
-    char *start_string = array_from_ref(start_token->strref);
-    char *error_string = array_from_ref(error_token->strref);
+void print_parse_error_desc(ErrorStruct *error, TokenVec *vector) {
+    Token start_token = tokenvec_get(vector, error->start);
+    Token error_token = tokenvec_get(vector, error->error);
+    char *start_string = array_from_ref(start_token.strref);
+    char *error_string = array_from_ref(error_token.strref);
     char *misc_string = "";
 
     if (!strcmp(error_string, "\n")) {
@@ -165,9 +188,9 @@ void print_parse_error_desc(ErrorStruct *error, Vector *token_list) {
     free(error_string);
 }
 
-void print_lex_error_desc(ErrorStruct *error, Vector *token_list) {
-    Token *token = vector_get(token_list, error->error);
-    char *string = array_from_ref(token->strref);
+void print_lex_error_desc(ErrorStruct *error, TokenVec *vector) {
+    Token token = tokenvec_get(vector, error->error);
+    char *string = array_from_ref(token.strref);
 
     switch (error->subtype.lex_error) {
         case INVALID_STRING:
@@ -189,10 +212,59 @@ void print_lex_error_desc(ErrorStruct *error, Vector *token_list) {
     free(string);
 }
 
+void print_type_error_desc(ErrorStruct *error, TokenVec *token_vec) {
+    Token error_token = tokenvec_get(token_vec, error->error);
+    Token first_token = tokenvec_get(token_vec, error->start);
+    char *first_string = array_from_ref(first_token.strref);
+    char *error_string = array_from_ref(error_token.strref);
+    size_t line, col;
+    Type first_type;
+    Type error_type;
+
+    get_loc(error_token.byte, file_string, &line, &col);
+    print_error_line(file_string, error_token.byte, error_token.byte, line, error);
+    get_loc(first_token.byte, file_string, &line, &col);
+    switch (error->subtype.type_error) {
+        case SHADOWED_VAR:
+            fprintf(OUTPUT, "Variable '%s' shadows previously declared variable.\n\nDefined here:\n", error_string);
+            print_error_line(file_string, first_token.byte, first_token.byte, line, error);
+            break;
+        case UNDECLARED_VAR:
+            fprintf(OUTPUT, "Assignment to variable '%s' without prior declaration.\n", error_string);
+            break;
+        case INVALID_ASSIGNMENT:
+            if (dict_try_array(type_dict, first_string, strlen(first_string), &first_type) 
+                && dict_try_array(type_dict, error_string, strlen(error_string), &error_type)) {
+                    char *first_type_string = type_string(&first_type);
+                    char *error_type_string = type_string(&error_type);
+
+                    fprintf(OUTPUT, "Type mismatch on assignment to variable '%s'.\n\tExpected: %s\n\tAssigned: %s\n\n",
+                        error_string, first_type_string, error_type_string);
+                    fprintf(OUTPUT, "First defined here:\n");
+                    print_error_line(file_string, first_token.byte, first_token.byte, line, error);
+
+                    free(first_type_string);
+                    free(error_type_string);
+                }
+            else
+                fprintf(OUTPUT, "Invalid assignment. Types invalid.\n");
+
+            break;
+        case MISMATCHED_OP:
+            fprintf(OUTPUT, "Type mismatch on binary expression.\nType established here:\n");
+            print_error_line(file_string, first_token.byte, first_token.byte, line, error);
+            break;
+        default:
+            break;
+    }
+
+    free(first_string); free(error_string);
+}
+
 void print_error_line(char *p_c, size_t startloc, size_t errorloc, size_t line, ErrorStruct *error) {
     size_t i;
-    Token *error_token = vector_get(token_list, error->error);
-    size_t error_end = errorloc + error_token->strref.length;
+    Token error_token = tokenvec_get(token_vec, error->error);
+    size_t error_end = errorloc + error_token.strref.length;
     size_t line_start = 0;
 
     if (startloc != 0) {

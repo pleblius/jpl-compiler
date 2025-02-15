@@ -22,7 +22,6 @@
 
 // Performs and prints lexical analysis of the provided .jpl file.
 int lex();
-void lex_print_output();
 void lex_clear_list(Vector*);
 TokenType lex_keyword_match(int);
 TokenType match_keyword(char *, size_t);

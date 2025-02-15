@@ -15,7 +15,7 @@ extern Vector *token_list;
 int parse_arg(uint64_t *p_index, Arg* node) {
     uint64_t index = *p_index;
     int status = EXIT_SUCCESS;
-    char* string;
+    StringRef string;
 
     if (expect_token(index, VARIABLE, &string) == EXIT_FAILURE) {
         parse_error(MISSING_TOKEN, *p_index, index, "[variable]");

@@ -33,7 +33,7 @@ int main(int argc, char *argv[]) {
         print_fail();
         return EXIT_FAILURE;
     }
-    else {
+    else if (print_mode != NO_PRINT) {
         print_success();
     }
     
@@ -95,15 +95,15 @@ int parse_input_args(int argc, char *argv[]) {
             case '-':
                 ++argv[i];
                 if (!strcmp(argv[i], "no-print")) {
-                    printf("no print\n");
+                    print_mode = NO_PRINT;
                 } else if (!strcmp(argv[i], "standard-print")) {
-                    printf("standard print\n");
+                    print_mode = STANDARD_PRINT;
                 } else if (!strcmp(argv[i], "tabbed-print")) {
-                    printf("tabbed print\n");
+                    // TODO
                 } else if (!strcmp(argv[i], "pp-print")) {
-                    printf("pretty print\n");
+                    // TODO 
                 } else if (!strcmp(argv[i], "xml-print")) {
-                    printf("xml print\n");
+                    // TODO
                 }
                 else {
                     invalid_args(argv[i]);

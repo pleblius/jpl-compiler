@@ -132,8 +132,6 @@ void cvec_print(CVec *vector) {
     cvec_append(vector, '\0');
 
     fputs(vector->array, stdout);
-
-    cvec_destroy(vector);
 }
 
 void cvec_destroy(CVec *vector) {

@@ -67,54 +67,26 @@ void cvec_append(CVec* vector, char c) {
 }
 
 void cvec_append_ref(CVec *vector, StringRef string) {
-    size_t cap = VECTOR_CAPACITY;
-    if (VECTOR_SIZE + string.length > cap) {
-        while (VECTOR_SIZE + string.length > cap) {
-            cap *= 2;
-        }
-
-        char *temp = malloc(cap); if (!temp) return;
-        strncpy(temp, VECTOR_ARRAY, VECTOR_SIZE);
-        free(VECTOR_ARRAY);
-        VECTOR_ARRAY = temp;
-        VECTOR_CAPACITY = cap;
-    }
-    
-    strncpy(&VECTOR_ARRAY[VECTOR_SIZE], string.string, string.length);
-    VECTOR_SIZE += string.length;
+    cvec_append_array(vector, string.string, string.length);
 }
 
 void cvec_append_array(CVec *vector, const char *string, size_t len) {
-    size_t cap = VECTOR_CAPACITY;
+    if (!vector || !string) return;
 
-    if (VECTOR_SIZE + len > cap) {
-        while (VECTOR_SIZE + len > cap) {
-            cap *= 2;
-        }
-
-        char *temp = malloc(cap); if (!temp) return;
-        strncpy(temp, VECTOR_ARRAY, VECTOR_SIZE);
-        free(VECTOR_ARRAY);
-        VECTOR_ARRAY = temp;
-        VECTOR_CAPACITY = cap;
+    while (VECTOR_SIZE + len > VECTOR_CAPACITY) {
+        cvec_expand(vector);
     }
-
-    strncpy(&VECTOR_ARRAY[VECTOR_SIZE], string, len);
-    VECTOR_SIZE += len;
+    
+    memcpy(&VECTOR_ARRAY[VECTOR_SIZE], string, len);
 }
 
 void cvec_append_ref_line(CVec *vector, StringRef string) {
-    char array[string.length + 1];
-    strncpy(array, string.string, string.length);
-    array[string.length] = '\n';
-    cvec_append_array(vector, array, string.length+1);
+    cvec_append_array_line(vector, string.string, string.length);
 }
 
 void cvec_append_array_line(CVec *vector, const char *string, size_t len) {
-    char array[len+1];
-    strncpy(array, string, len);
-    array[len] = '\n';
-    cvec_append_array(vector, array, len+1);
+    cvec_append_array(vector, string, len);
+    cvec_append(vector, '\n');
 }
 
 char cvec_pop_last(CVec *vector) {

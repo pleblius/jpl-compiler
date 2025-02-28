@@ -231,6 +231,8 @@ void print_fail() {
 
     print_errors(token_vector);
     clear_errors();
+
+    printf("Compilation Failed.\n");
 }
 
 void print_success() {

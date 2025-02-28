@@ -11,6 +11,30 @@
 #define LINE_WIDTH 120
 #define PRINT_WIDTH 100
 
+#define ANSI_RESET_ALL          "\x1b[0m"
+
+#define ANSI_COLOR_BLACK        "\x1b[30m"
+#define ANSI_COLOR_RED          "\x1b[31m"
+#define ANSI_COLOR_GREEN        "\x1b[32m"
+#define ANSI_COLOR_YELLOW       "\x1b[33m"
+#define ANSI_COLOR_BLUE         "\x1b[34m"
+#define ANSI_COLOR_MAGENTA      "\x1b[35m"
+#define ANSI_COLOR_CYAN         "\x1b[36m"
+#define ANSI_COLOR_WHITE        "\x1b[37m"
+
+#define ANSI_BACKGROUND_BLACK   "\x1b[40m"
+#define ANSI_BACKGROUND_RED     "\x1b[41m"
+#define ANSI_BACKGROUND_GREEN   "\x1b[42m"
+#define ANSI_BACKGROUND_YELLOW  "\x1b[43m"
+#define ANSI_BACKGROUND_BLUE    "\x1b[44m"
+#define ANSI_BACKGROUND_MAGENTA "\x1b[45m"
+#define ANSI_BACKGROUND_CYAN    "\x1b[46m"
+#define ANSI_BACKGROUND_WHITE   "\x1b[47m"
+
+#define ANSI_STYLE_BOLD         "\x1b[1m"
+#define ANSI_STYLE_ITALIC       "\x1b[3m"
+#define ANSI_STYLE_UNDERLINE    "\x1b[4m"
+
 static char *file_string;
 static char *file_name;
 static Vector *error_tokens;
@@ -46,7 +70,7 @@ void print_errors(TokenVec *tokens) {
     if (!tokens) return;
     
     ErrorToken *error;
-    for (size_t i = 0; i < tokens->size; ++i) {
+    for (size_t i = 0; i < error_tokens->size; ++i) {
         error = vector_get(error_tokens, i);
 
         switch (error->error_type) {
@@ -64,10 +88,6 @@ void print_errors(TokenVec *tokens) {
 }
 
 void clear_errors() {
-    for (size_t i = 0; i < error_tokens->size; ++i) {
-        free(vector_get(error_tokens, i));
-    }
-
     vector_destroy(error_tokens);
 }
 
@@ -89,7 +109,7 @@ void print_lex_error(ErrorToken *error, TokenVec *tokens) {
             break;
         case ILLEGAL_LEX:
             c = *token->strref.string;
-            printf("\tIllegal character: '%d'\n\n", c);
+            printf("\tIllegal character: " ANSI_COLOR_RED ANSI_STYLE_BOLD "'%d'\n\n" ANSI_RESET_ALL, c);
             break;
     }
 }
@@ -104,6 +124,33 @@ void print_type_error(ErrorToken *error, TokenVec *tokens) {
 
 void print_one_token_line(Token *token) {
     if (!token) return;
+
+    uint32_t line = 1;
+    uint32_t col = 1;
+    get_error_loc(token, &col, &line);
+
+    StringRef string = token->strref;
+    uint32_t span = string.length;
+
+    // Case 1 - Everything fits in one line
+    if (col + span < LINE_WIDTH) {
+        char prefix[col];
+        char postfix[LINE_WIDTH - span - col + 1];
+        char error[span + 1];
+
+        strncpy(prefix, string.string-(col-1), col);
+        strncpy(error, string.string, string.length);
+        strncpy(postfix, string.string + string.length, LINE_WIDTH - span - col);
+
+        prefix[col-1] = '\0';
+        error[span] = '\0';
+        postfix[LINE_WIDTH - span - col] = '\0';
+
+        printf("%6d | %4d  %s" ANSI_COLOR_RED ANSI_STYLE_BOLD "%s" ANSI_RESET_ALL "%s\n\n", line, col, prefix, error, postfix);
+    }
+    // Case 2 - Everything fits but needs to be shifted
+
+    // Case 3 - Lines need to be split
 }
 
 void print_two_token_line(Token *start_token, Token *end_token) {

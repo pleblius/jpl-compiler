@@ -299,14 +299,14 @@ uint32_t lex_multiline_comment(char *string, uint32_t loc, Token *out) {
 
     while (1) {
         if (c != NEWLINE_M && IS_ILLEGAL(c)) {
-            type = INVALID;
-            break;
+            type = ILLEGAL;
         }
-        if (c == TIMES && *(c_ptr + 1) == SLASH) {
+        else if (c == TIMES && *(c_ptr + 1) == SLASH) {
             count += 2;
 
             break;
         }
+
         ++count;
         c = *(++c_ptr);
     }
@@ -321,9 +321,16 @@ uint32_t lex_string_token(char *string, uint32_t loc, Token *out) {
     char *c_ptr = string + 1;
     char c = *c_ptr;
 
-    while (c != QUOTE) {
-        if (IS_ILLEGAL(c) || c == NEWLINE_M) {
+    while (1) {
+        if (c == NEWLINE_M || c == '\0') {
             type = INVALID;
+            break;
+        }
+        else if (IS_ILLEGAL(c)) {
+            type = ILLEGAL;
+        }
+        else if (c == QUOTE) {
+            ++count;
             break;
         }
 
@@ -331,7 +338,6 @@ uint32_t lex_string_token(char *string, uint32_t loc, Token *out) {
         c = *(++c_ptr);
     }
 
-    ++count;
     *out = create_token(type, loc, count, string);
     return count;
 }
@@ -354,7 +360,7 @@ uint32_t lex_bool_token(char *string, uint32_t loc, Token *out) {
             if (*string == c)
                 count = 2;
             else
-                type = ILLEGAL;
+                type = INVALID;
             break;
         default:
             if (c == EQUAL_M)

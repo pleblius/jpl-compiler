@@ -3,11 +3,12 @@
 #include "printer.h"
 #include "token.h"
 
-char *token_output[] = { "ARRAY", "ASSERT", "BOOL", "COLON", "COMMA", "DOT", "ELSE", "END_OF_FILE",
-                        "EQUALS", "FALSE", "FLOAT", "FLOATVAL", "FN", "IF", "IMAGE", "INT", "INTVAL",
-                        "LCURLY",  "LET", "LPAREN", "LSQUARE", "NEWLINE", "OP", "PRINT", "RCURLY", 
-                        "READ", "RETURN", "RPAREN", "RSQUARE", "SHOW", "STRING", "STRUCT", "SUM", 
-                        "THEN", "TIME", "TO", "TRUE", "VARIABLE", "VOID", "WRITE" };
+char *token_output[] = { "ARRAY '", "ASSERT '", "BOOL '", "COLON '", "COMMA '", "DOT '", "ELSE '", "END_OF_FILE",
+                        "EQUALS '", "FALSE '", "FLOAT '", "FLOATVAL '", "FN '", "IF '", "IMAGE '", "INT '", "INTVAL '",
+                        "LCURLY '",  "LET '", "LPAREN '", "LSQUARE '", "NEWLINE", "OP '", "PRINT '", "RCURLY '", 
+                        "READ '", "RETURN '", "RPAREN '", "RSQUARE '", "SHOW '", "STRING '", "STRUCT '", "SUM '", 
+                        "THEN '", "TIME '", "TO '", "TRUE '", "VARIABLE '", "VOID '", "WRITE '" };
+
 
 CVec *print_buffer;
 
@@ -34,9 +35,8 @@ void print_tokens(TokenVec *vector, PrintMode mode) {
                 break;
             default:
                 cvec_append_array(print_buffer, token_string, strlen(token_string));
-                cvec_append_array(print_buffer, " \'", 2);
                 cvec_append_ref(print_buffer, token->strref);
-                cvec_append_array_line(print_buffer, "\'", 1);
+                cvec_append_array(print_buffer, "\'\n", 2);
         }
     }
     cvec_print(print_buffer);

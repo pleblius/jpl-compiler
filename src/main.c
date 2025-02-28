@@ -238,7 +238,7 @@ void print_fail() {
 void print_success() {
     switch (run_mode) {
         case LEX_MODE:
-            print_tokens(token_vector, print_mode);
+            print_tokens(token_vector);
             break;
         case PARSE_MODE:
         case TYPE_MODE:

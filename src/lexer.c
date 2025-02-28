@@ -373,6 +373,7 @@ uint32_t lex_bool_token(char *string, uint32_t loc, Token *out) {
 
 int is_keyword_match(char *string, uint32_t loc, uint32_t len, Token *out) {
     if (!string || !len || !out) return 0;
+    if (len < 2 || len > 6) return 0;
 
     TokenType *type;
     if (dict_try_array(keyword_dictionary, string, len, (void**) &type)) {

@@ -10,11 +10,10 @@ char *token_output[] = { "ARRAY '", "ASSERT '", "BOOL '", "COLON '", "COMMA '", 
                         "THEN '", "TIME '", "TO '", "TRUE '", "VARIABLE '", "VOID '", "WRITE '" };
 
 
-CVec *print_buffer;
+static CVec *print_buffer;
+static int type_check = 0;
 
-void print_tokens(TokenVec *vector, PrintMode mode) {
-    if (mode == NO_PRINT) return;
-
+void print_tokens(TokenVec *vector) {
     Token *token;
     size_t num_tokens = sizeof(token_output)/sizeof(char*);
     print_buffer = cvec_create_cap(vector->size << 8); if (!print_buffer) return;

@@ -78,6 +78,7 @@ void cvec_append_array(CVec *vector, const char *string, size_t len) {
     }
     
     memcpy(&VECTOR_ARRAY[VECTOR_SIZE], string, len);
+    VECTOR_SIZE += len;
 }
 
 void cvec_append_ref_line(CVec *vector, StringRef string) {
@@ -132,7 +133,7 @@ void cvec_print(CVec *vector) {
 
     fputs(vector->array, stdout);
 
-    cvec_pop_last(vector);
+    cvec_destroy(vector);
 }
 
 void cvec_destroy(CVec *vector) {

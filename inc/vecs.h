@@ -6,6 +6,7 @@
 
 #include "token.h"
 #include "stringops.h"
+#include "astnode.h"
 
 typedef struct {
     char *array;
@@ -18,6 +19,12 @@ typedef struct {
     size_t size;
     size_t capacity;
 } TokenVec;
+
+typedef struct {
+    AstNode *array;
+    size_t size;
+    size_t capacity;
+} NodeVec;
 
 CVec *cvec_create_cap(size_t);
 CVec *cvec_create();
@@ -45,5 +52,17 @@ size_t tokenvec_size(TokenVec*);
 void tokenvec_clear(TokenVec*);
 void tokenvec_destroy(TokenVec*);
 int tokenvec_is_empty(TokenVec*);
+
+NodeVec *nodevec_create_cap(size_t);
+NodeVec *nodevec_create();
+void nodevec_expand(NodeVec*);
+void nodevec_shrink(NodeVec*);
+size_t nodevec_append(NodeVec*, AstNode);
+AstNode *nodevec_get(NodeVec*, size_t);
+AstNode *nodevec_peek_last(NodeVec*);
+AstNode nodevec_pop_last(NodeVec*);
+void nodevec_clear(NodeVec*);
+void nodevec_destroy(NodeVec*);
+int nodevec_is_empty(NodeVec*);
 
 #endif // VECS_H

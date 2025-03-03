@@ -5,6 +5,7 @@
 #include "token.h"
 #include "dict.h"
 #include "vecs.h"
+#include "error.h"
 
 #define NEWLINE_M '\n'
 #define SCORE '_'
@@ -37,6 +38,7 @@
 
 #define IS_DIGIT(c) (c <= '9' && c >= '0')
 #define IS_ILLEGAL(c) (c < 32 || c == 127)
+
 int lex_string(char*, size_t, TokenVec**);
 
 uint32_t lex_var_token(char*, uint32_t, Token*);
@@ -52,6 +54,6 @@ uint32_t lex_bool_token(char*, uint32_t, Token*);
 int is_keyword_match(char *, uint32_t, uint32_t, Token*);
 Dict *create_keyword_dictionary();
 
-void lex_error(Token*);
+void lex_error(LexErrorType, Token*);
 
 #endif // LEXER_H

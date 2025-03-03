@@ -43,21 +43,6 @@ void cvec_expand(CVec* vector) {
     free(temp_array);
 }
 
-void cvec_shrink(CVec* vector) {
-    if (!vector) return;
-
-    char *temp_array = VECTOR_ARRAY;
-
-    VECTOR_ARRAY = (char *) malloc(sizeof(char) * VECTOR_CAPACITY / 2);
-    if (!VECTOR_ARRAY) return;
-
-    VECTOR_CAPACITY /= 2;
-
-    memcpy(VECTOR_ARRAY, temp_array, VECTOR_CAPACITY * sizeof(char));
-
-    free(temp_array);
-}
-
 void cvec_append(CVec* vector, char c) {
     if (!vector) return;
 
@@ -96,9 +81,6 @@ char cvec_pop_last(CVec *vector) {
 
     char c = VECTOR_ARRAY[LAST_INDEX];
     --VECTOR_SIZE;
-
-    if (VECTOR_SIZE < VECTOR_CAPACITY / 3 && VECTOR_CAPACITY >= 2 * CAPACITY_DEFAULT)
-        cvec_shrink(vector);
 
     return c;
 }
@@ -176,21 +158,6 @@ void tokenvec_expand(TokenVec *vector) {
     free(temp_array);
 }
 
-void tokenvec_shrink(TokenVec *vector) {
-    if (!vector) return;
-
-    Token *temp_array = VECTOR_ARRAY;
-
-    VECTOR_ARRAY = (Token *) malloc(sizeof(Token) * VECTOR_CAPACITY / 2);
-    if (!VECTOR_ARRAY) return;
-
-    VECTOR_CAPACITY /= 2;
-
-    memcpy(VECTOR_ARRAY, temp_array, VECTOR_CAPACITY * sizeof(Token));
-
-    free(temp_array);
-}
-
 void tokenvec_append(TokenVec* vector, Token token) {
     if (!vector) return;
 
@@ -241,4 +208,75 @@ void tokenvec_destroy(TokenVec *vector) {
 int tokenvec_is_empty(TokenVec *vector) {
     if (!vector) return 0;
     return VECTOR_IS_EMPTY;
+}
+
+NodeVec *nodevec_create_cap(size_t capacity) {
+    if (!capacity) return NULL;
+    NodeVec *vector = malloc(sizeof(NodeVec));
+    if (!vector) return NULL;
+
+    VECTOR_ARRAY = malloc(sizeof(AstNode) * capacity);
+    if (!VECTOR_ARRAY) {
+        free(vector);
+        return NULL;
+    }
+
+    VECTOR_CAPACITY = capacity;
+    VECTOR_SIZE = 0;
+    return vector;
+}
+NodeVec *nodevec_create() {
+    return nodevec_create_cap(CAPACITY_DEFAULT);
+}
+
+void nodevec_expand(NodeVec *vector) {
+    if (!vector) return;
+
+    AstNode *temp = VECTOR_ARRAY;
+    VECTOR_ARRAY = malloc(sizeof(AstNode) * 2 * VECTOR_CAPACITY);
+    if (!VECTOR_ARRAY) {
+        free(temp);
+        return;
+    }
+
+    memcpy(VECTOR_ARRAY, temp, VECTOR_CAPACITY * sizeof(AstNode));
+
+    VECTOR_CAPACITY *= 2;
+    free(temp);
+}
+
+size_t nodevec_append(NodeVec *vector, AstNode node) {
+    if (!vector) return 0;
+    if (VECTOR_SIZE == VECTOR_CAPACITY)
+        nodevec_expand(vector);
+        
+    VECTOR_ARRAY[VECTOR_SIZE++] = node;
+    return VECTOR_SIZE - 1;
+}
+
+AstNode *nodevec_get(NodeVec *vector, size_t index) {
+    if (!vector || index >= VECTOR_SIZE) return NULL;
+
+    return &VECTOR_ARRAY[index];
+}
+AstNode *nodevec_peek_last(NodeVec *vector) {
+    if (!vector || VECTOR_IS_EMPTY) return NULL;
+
+    return &VECTOR_ARRAY[VECTOR_SIZE-1];
+}
+
+AstNode nodevec_pop_last(NodeVec *vector) {
+    if (!vector || VECTOR_IS_EMPTY) return get_empty_node();
+
+    return VECTOR_ARRAY[--VECTOR_SIZE];
+}
+
+void nodevec_destroy(NodeVec *vector) {
+    free(VECTOR_ARRAY);
+    free(vector);
+}
+
+int nodevec_is_empty(NodeVec *vector) {
+    if (!vector || VECTOR_IS_EMPTY) return 0;
+    return 1;
 }

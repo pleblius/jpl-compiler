@@ -2,10 +2,12 @@
 #define ERROR_H
 
 #include "token.h"
+#include "vecs.h"
 
 typedef enum { LEX_ERROR, PARSE_ERROR, TYPE_ERROR } ErrorType;
-typedef enum { INVALID_LEX, ILLEGAL_LEX } LexErrorType;
-typedef enum { UNEXPECTED_TOKEN, BAD_CMD, BAD_EXPR, BAD_LVALUE, BAD_STMT, BAD_ARG, BAD_TYPE, UNCLOSED_PAREN } ParseErrorType;
+typedef enum { INVALID_LEX, ILLEGAL_LEX, UNCLOSED_STRING } LexErrorType;
+typedef enum { UNEXPECTED_TOKEN, BAD_CMD, BAD_EXPR, BAD_LVALUE, BAD_STMT, BAD_BIND, BAD_TYPE, BAD_UNARY, BAD_BINARY,
+                UNCLOSED_PAREN, INT_RANGE, FLOAT_RANGE } ParseErrorType;
 typedef enum { MISMATCHED_BINOP, BAD_INDEX, BAD_DERFERENCE, UNDECLARED_VARIABLE, SHADOWED_VARIABLE, NO_RETURN, BAD_RETURN, BAD_ASSIGN } TypeErrorType;
 
 typedef struct {

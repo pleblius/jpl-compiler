@@ -15,13 +15,13 @@
 Vector *vector_create_cap(size_t capacity) {
     if (capacity <= 0) {
         fprintf(stderr, "Vector capacity must be greater than 0.\n");
-        exit(EXIT_FAILURE);
+        return NULL;
     }
 
     Vector *vector = (Vector*) malloc(sizeof(Vector));
     if (!vector) {
         fprintf(stderr, "Vector memory allocation failed.\n");
-        exit(EXIT_FAILURE);
+        return NULL;
     }
 
     VECTOR_SIZE = 0;
@@ -30,7 +30,7 @@ Vector *vector_create_cap(size_t capacity) {
     VECTOR_ARRAY = (void**) malloc(sizeof(void*) * capacity);
     if (!VECTOR_ARRAY) {
         fprintf(stderr, "Array memory allocation failed.\n");
-        exit(EXIT_FAILURE);
+        return NULL;
     }
 
     return vector;
@@ -45,7 +45,7 @@ Vector *vector_create() {
 void vector_expand(Vector *vector) {
     if (!vector) {
         fprintf(stderr, "Invalid vector reference.\n");
-        exit(EXIT_FAILURE);
+        return;
     }
 
     void **temp_array = VECTOR_ARRAY;
@@ -53,7 +53,7 @@ void vector_expand(Vector *vector) {
     VECTOR_ARRAY = (void**) malloc(sizeof(void*) * 2 * VECTOR_CAPACITY);
     if (!VECTOR_ARRAY) {
         fprintf(stderr, "Array memory allocation failed.\n");
-        exit(EXIT_FAILURE);
+        return;
     }
 
     memcpy(VECTOR_ARRAY, temp_array, VECTOR_CAPACITY*sizeof(void*));
@@ -66,7 +66,7 @@ void vector_expand(Vector *vector) {
 void vector_shrink(Vector *vector) {
     if (!vector) {
         fprintf(stderr, "Invalid vector reference.\n");
-        exit(EXIT_FAILURE);
+        return;
     }
 
     void **temp_array = VECTOR_ARRAY;
@@ -74,7 +74,7 @@ void vector_shrink(Vector *vector) {
     VECTOR_ARRAY = (void**) malloc(sizeof(void*) * VECTOR_CAPACITY / 2);
     if (!VECTOR_ARRAY) {
         fprintf(stderr, "Array memory allocation failed.\n");
-        exit(EXIT_FAILURE);
+        return;
     }
 
     VECTOR_CAPACITY /= 2;
@@ -87,11 +87,11 @@ void vector_shrink(Vector *vector) {
 void vector_insert(Vector *vector, size_t index, void *data) {
     if (!vector) {
         fprintf(stderr, "Invalid vector reference.\n");
-        exit(EXIT_FAILURE);
+        return;
     }
     if (index > VECTOR_SIZE) {
         fprintf(stderr, "Index exceeds vector length.\n");
-        exit(EXIT_FAILURE);
+        return;
     }
 
     if (VECTOR_SIZE == VECTOR_CAPACITY) vector_expand(vector);
@@ -109,7 +109,7 @@ void vector_insert(Vector *vector, size_t index, void *data) {
 void vector_append(Vector *vector, void *data) {
     if (!vector) {
         fprintf(stderr, "Invalid vector reference.\n");
-        exit(EXIT_FAILURE);
+        return;
     }
 
     if (VECTOR_SIZE == VECTOR_CAPACITY) vector_expand(vector);
@@ -121,11 +121,11 @@ void vector_append(Vector *vector, void *data) {
 void *vector_set(Vector *vector, size_t index, void *data) {
     if (!vector) {
         fprintf(stderr, "Invalid vector reference.\n");
-        exit(EXIT_FAILURE);
+        return NULL;
     }
     if (index > VECTOR_SIZE) {
         fprintf(stderr, "Index exceeds vector length.\n");
-        exit(EXIT_FAILURE);
+        return NULL;
     }
 
     void *temp_data = VECTOR_ARRAY[index];
@@ -138,11 +138,11 @@ void *vector_set(Vector *vector, size_t index, void *data) {
 void *vector_get(Vector *vector, size_t index) {
     if (!vector) {
         fprintf(stderr, "Invalid vector reference.\n");
-        exit(EXIT_FAILURE);
+        return NULL;
     }
     if (index > VECTOR_SIZE) {
         fprintf(stderr, "Index exceeds vector length.\n");
-        exit(EXIT_FAILURE);
+        return NULL;
     }
 
     return VECTOR_ARRAY[index];
@@ -152,7 +152,7 @@ void *vector_get(Vector *vector, size_t index) {
 void *vector_pop_last(Vector *vector) {
     if (!vector) {
         fprintf(stderr, "Invalid vector reference.\n");
-        exit(EXIT_FAILURE);
+        return NULL;
     }
     if VECTOR_IS_EMPTY return NULL;
 
@@ -169,7 +169,7 @@ void *vector_pop_last(Vector *vector) {
 void *vector_peek_last(Vector *vector) {
     if (!vector) {
         fprintf(stderr, "Invalid vector reference.\n");
-        exit(EXIT_FAILURE);
+        return NULL;
     }
     if VECTOR_IS_EMPTY return NULL;
 
@@ -180,7 +180,7 @@ void *vector_peek_last(Vector *vector) {
 size_t vector_size(Vector *vector) {
     if (!vector) {
         fprintf(stderr, "Invalid vector reference.\n");
-        exit(EXIT_FAILURE);
+        return 0;
     }
 
     return VECTOR_SIZE;
@@ -190,7 +190,7 @@ size_t vector_size(Vector *vector) {
 int vector_is_empty(Vector *vector) {
     if (!vector) {
         fprintf(stderr, "Invalid vector reference.\n");
-        exit(EXIT_FAILURE);
+        return 1;
     }
 
     return vector->size == 0;
@@ -200,7 +200,7 @@ int vector_is_empty(Vector *vector) {
 void vector_clear(Vector *vector) {
     if (!vector) {
         fprintf(stderr, "Invalid vector reference.\n");
-        exit(EXIT_FAILURE);
+        return;
     }
     if VECTOR_IS_EMPTY return;
 
@@ -217,7 +217,7 @@ void vector_clear(Vector *vector) {
 void vector_print(Vector *vector) {
     if (!vector) {
         fprintf(stderr, "Invalid vector reference.\n");
-        exit(EXIT_FAILURE);
+        return;
     }
 
     size_t i;
@@ -234,10 +234,21 @@ void vector_print(Vector *vector) {
 void vector_destroy(Vector *vector) {
     if (!vector) {
         fprintf(stderr, "Invalid vector reference.\n");
-        exit(EXIT_FAILURE);
+        return;
     }
 
     vector_clear(vector);
     free(vector -> array);
+    free(vector);
+}
+
+// Destroys the vector without touching its internal elements.
+void vector_destroy_light(Vector *vector) {
+    if (!vector) {
+        fprintf(stderr, "Invalid vector reference.\n");
+        return;
+    }
+
+    free(vector->array);
     free(vector);
 }

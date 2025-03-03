@@ -44,25 +44,11 @@ typedef enum {
     VARIABLE,
     VOID,
     WRITE,
-    COMMENT,
     // Meta tokens
     INVALID,
     ILLEGAL,
-    CMD,
-    EXPR,
-    LVALUE,
-    ARG,
-    STMT,
-    TYPE,
-    BIND,
-    STMTS,
-    BINDS,
-    STRUCTBINDS,
-    EXPRS,
-    LOOPBINDS,
-    VARIABLES,
-    COMMAS,
-    END
+    UNCLOSED,
+    COMMENT,
 } TokenType;
 
 typedef struct {

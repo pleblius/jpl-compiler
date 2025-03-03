@@ -2,7 +2,6 @@
 #include <stdint.h>
 
 #include "lexer.h"
-#include "error.h"
 
 static char* keywords[] = { "array", "assert", "bool", "else", "false", "float", "fn", "if", "image", "int", "let", "print",
                                 "read", "return", "show", "struct", "sum", "then", "time", "to", "true", "void", "write" };
@@ -36,6 +35,8 @@ int lex_string(char* string, size_t size, TokenVec **vector) {
             ++string;
             ++byte;
         }
+
+        if (*string == '\0') break;
 
         switch (*string) {
             // Variables and keywords
@@ -131,9 +132,13 @@ int lex_string(char* string, size_t size, TokenVec **vector) {
 
         tokenvec_append(token_vector, new_token);
 
-        if (new_token.type == INVALID || new_token.type == ILLEGAL) {
-            lex_error(tokenvec_peek_last(token_vector));
-        }
+        if (new_token.type == INVALID)
+            lex_error(INVALID_LEX, tokenvec_peek_last(token_vector));
+        else if (new_token.type == ILLEGAL)
+            lex_error(ILLEGAL_LEX, tokenvec_peek_last(token_vector));
+        else if (new_token.type == UNCLOSED)
+            lex_error(UNCLOSED_STRING, tokenvec_peek_last(token_vector));
+
 
         string += count;
         byte += count;
@@ -323,7 +328,7 @@ uint32_t lex_string_token(char *string, uint32_t loc, Token *out) {
 
     while (1) {
         if (c == NEWLINE_M || c == '\0') {
-            type = INVALID;
+            type = UNCLOSED;
             break;
         }
         else if (IS_ILLEGAL(c)) {
@@ -372,7 +377,7 @@ uint32_t lex_bool_token(char *string, uint32_t loc, Token *out) {
 }
 
 int is_keyword_match(char *string, uint32_t loc, uint32_t len, Token *out) {
-    if (!string || !len || !out) return 0;
+    if (!string || !out) return 0;
     if (len < 2 || len > 6) return 0;
 
     TokenType *type;
@@ -398,17 +403,7 @@ Dict *create_keyword_dictionary() {
     return dict;
 }
 
-void lex_error(Token *token) {
-    switch (token->type) {
-        case INVALID:
-            add_lex_error(INVALID_LEX, token);
-            break;
-        case ILLEGAL:
-            add_lex_error(ILLEGAL_LEX, token);
-            break;
-        default:
-            return;
-    }
-
+void lex_error(LexErrorType type, Token *token) {
+    add_lex_error(type, token);
     lex_fail_status = EXIT_FAILURE;
 }

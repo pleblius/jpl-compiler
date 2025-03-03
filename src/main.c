@@ -10,6 +10,7 @@
 #include "vector.h"
 #include "printer.h"
 #include "error.h"
+#include "parser.h"
 
 static RunMode run_mode = RUN_MODE;
 static PrintMode print_mode = STANDARD_PRINT;
@@ -17,7 +18,8 @@ static char *file_name;
 static char *file_string;
 static size_t file_size;
 static TokenVec *token_vector;
-static Vector *node_vector;
+static NodeVec *node_vector;
+static Vector *cmd_vector;
 
 int main(int argc, char *argv[]) {
     if (parse_input_args(argc, argv) != EXIT_SUCCESS)
@@ -205,7 +207,7 @@ int run_compilation() {
             break;
         case PARSE_MODE:
             lex_string(file_string, file_size, &token_vector);
-            // return parse_tokens(token_vector, token_vector->size, node_vector);
+            exit_status = parse_tokens(token_vector, &node_vector, &cmd_vector);
             break;
         case TYPE_MODE:
             lex_string(file_string, file_size, &token_vector);
@@ -232,7 +234,7 @@ void print_fail() {
     print_errors(token_vector);
     clear_errors();
 
-    printf("Compilation Failed.\n");
+    printf("Compilation failed\n");
 }
 
 void print_success() {
@@ -241,6 +243,8 @@ void print_success() {
             print_tokens(token_vector);
             break;
         case PARSE_MODE:
+            print_nodes(node_vector, cmd_vector, token_vector);
+            break;
         case TYPE_MODE:
         case C_MODE:
         case RUN_MODE:
@@ -248,7 +252,7 @@ void print_success() {
             return;
     }
 
-    printf("Compilation succeeded.\n");
+    printf("Compilation succeeded\n");
 }
 
 void gen_defines();

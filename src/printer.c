@@ -14,25 +14,26 @@ char *token_output[] = { "ARRAY '", "ASSERT '", "BOOL '", "COLON '", "COMMA '", 
                         "READ '", "RETURN '", "RPAREN '", "RSQUARE '", "SHOW '", "STRING '", "STRUCT '", "SUM '", 
                         "THEN '", "TIME '", "TO '", "TRUE '", "VARIABLE '", "VOID '", "WRITE '" };
 
-char *cmd_output[] = { "(ReadCmd ", "(WriteCmd ", "(LetCmd ", "(AssertCmd ", "(PrintCmd ", "(ShowCmd ", "(TimeCmd ", "(FnCmd ", "(StructCmd "};
-int cmd_lengths[] = { 9, 10, 8, 11, 10, 9, 9, 7, 11 };
+char *cmd_output[] = { "(ReadCmd", "(WriteCmd", "(LetCmd", "(AssertCmd", "(PrintCmd", "(ShowCmd", "(TimeCmd", "(FnCmd", "(StructCmd"};
+int cmd_lengths[] = { 8, 9, 7, 10, 9, 8, 8, 6, 10 };
 
-char *expr_output[] = { "(IntExpr ", "(FloatExpr ", "(TrueExpr", "(FalseExpr", "(VarExpr ", "(VoidExpr", "(ArrayLiteralExpr", "(StructLiteralExpr ",
-                        "(DotExpr ", "(ArrayIndexExpr ", "(CallExpr ", "(UnopExpr ", "(BinopExpr ", "(IfExpr ", "(ArrayLoopExpr", "(SumLoopExpr" };
-int expr_lengths[] = { 9, 11, 9, 10, 9, 9, 17, 19, 9, 16, 10, 10, 11, 8, 14, 12 };
+char *expr_output[] = { "(IntExpr", "(FloatExpr", "(TrueExpr", "(FalseExpr", "(VarExpr", "(VoidExpr", "(ArrayLiteralExpr", "(StructLiteralExpr",
+                        "(DotExpr", "(ArrayIndexExpr", "(CallExpr", "(UnopExpr", "(BinopExpr", "(IfExpr", "(ArrayLoopExpr", "(SumLoopExpr" };
+int expr_lengths[] = { 8, 10, 9, 10, 8, 9, 17, 18, 8, 15, 9, 9, 10, 7, 14, 12 };
 
-char *lvalue_output[] = { "(VarLValue ", "(ArrayLValue "};
-int lvalue_lengths[] = { 11, 13 };
+char *lvalue_output[] = { "(VarLValue", "(ArrayLValue"};
+int lvalue_lengths[] = { 10, 12 };
 
-char *stmt_output[] = { "(LetStmt ", "(AssertStmt ", "(ReturnStmt " };
-int stmt_lengths[] = { 9, 12, 12 };
+char *stmt_output[] = { "(LetStmt", "(AssertStmt", "(ReturnStmt" };
+int stmt_lengths[] = { 8, 11, 11 };
 
-char *type_output[] = { "(IntType", "(BoolType", "(FloatType", "(ArrayType ", "(StructType ", "(VoidType" };
-int type_lengths[] = { 8, 9, 10, 11, 12, 9 };
+char *type_output[] = { "(IntType", "(BoolType", "(FloatType", "(ArrayType", "(StructType", "(VoidType", "(VarType" };
+int type_lengths[] = { 8, 9, 10, 10, 11, 9, 8 };
 
 static CVec *print_buffer;
 static NodeVec *node_list;
 static TokenVec *token_list;
+static int type_mode;
 
 void print_tokens(TokenVec *vector) {
     if (!vector) return;
@@ -83,10 +84,15 @@ void print_nodes(NodeVec *nodes, Vector *commands, TokenVec *tokens) {
     cvec_destroy(print_buffer);
 }
 
+void set_type_check(int value) {
+    type_mode = value;
+}
+
 void print_command(AstNode *cmd) {
     char *header = cmd_output[cmd->type.cmd];
 
     cvec_append_array(print_buffer, header, cmd_lengths[cmd->type.cmd]);
+    ADD_SPACE;
     Vector *list;
 
     switch (cmd->type.cmd) {
@@ -103,7 +109,7 @@ void print_command(AstNode *cmd) {
         case LET_CMD:
             print_lvalue(nodevec_get(node_list, cmd->field1.node));
             ADD_SPACE;
-            print_expression(nodevec_get(node_list, cmd->field2.node));
+            print_expression(nodevec_get(node_list, cmd->field3.node));
             break;
         case ASSERT_CMD:
             print_expression(nodevec_get(node_list, cmd->field1.node));
@@ -129,7 +135,7 @@ void print_command(AstNode *cmd) {
                 if (i) ADD_SPACE;
                 print_binding(nodevec_get(node_list, (uint64_t) vector_get(list, i)));
             }
-            vector_destroy_light(list);
+            vector_destroy(list);
             ADD_RPAREN;
             ADD_RPAREN;
             ADD_SPACE;
@@ -139,20 +145,19 @@ void print_command(AstNode *cmd) {
                 ADD_SPACE;
                 print_statement(nodevec_get(node_list, (uint64_t) vector_get(list, i)));
             }
-            vector_destroy_light(list);
+            vector_destroy(list);
             break;
         case STRUCT_CMD:
             cvec_append_ref(print_buffer, cmd->string);
             list = cmd->field1.list;
             for (size_t i = 0; i < list->size; ++i) {
                 ADD_SPACE;
-                AstNode *bind = nodevec_get(node_list, (uint64_t) vector_get(list, i));
-                AstNode *lvalue = nodevec_get(node_list, bind->field1.node);
-                cvec_append_ref(print_buffer, lvalue->string);
+                AstNode *member = nodevec_get(node_list, (uint64_t) vector_get(list, i));
+                cvec_append_ref(print_buffer, member->string);
                 ADD_SPACE;
-                print_type(nodevec_get(node_list, bind->field2.node));
+                print_type(nodevec_get(node_list, member->field2.node));
             }
-            vector_destroy_light(list);
+            vector_destroy(list);
             break;
         default:
             return;
@@ -164,6 +169,7 @@ void print_command(AstNode *cmd) {
 void print_lvalue(AstNode *lvalue) {
     char *header = lvalue_output[lvalue->type.lvalue];
     cvec_append_array(print_buffer, header, lvalue_lengths[lvalue->type.lvalue]);
+    ADD_SPACE;
 
     switch (lvalue->type.lvalue) {
         case VAR_LVALUE:
@@ -174,9 +180,9 @@ void print_lvalue(AstNode *lvalue) {
             Vector *list = lvalue->field1.list;
             for (size_t i = 0; i < list->size; ++i) {
                 ADD_SPACE;
-                cvec_append_ref(print_buffer, tokenvec_get(token_list, (uint64_t) vector_get(list, i))->strref);
+                cvec_append_ref(print_buffer, nodevec_get(node_list, (uint64_t) vector_get(list, i))->string);
             }
-            vector_destroy_light(list);
+            vector_destroy(list);
             break;
         default:
             return;
@@ -189,16 +195,23 @@ void print_expression(AstNode *expr) {
     char *header = expr_output[expr->type.expr];
     cvec_append_array(print_buffer, header, expr_lengths[expr->type.expr]);
 
+    if (type_mode) {
+        ADD_SPACE;
+        print_type(nodevec_get(node_list, expr->field4.node));
+    }
+
     char buffer[30];
     Vector *list;
     Vector *list2;
     switch (expr->type.expr) {
         case INT_EXPR:
+            ADD_SPACE;
             if (sprintf(buffer, "%ld", expr->field1.int_value) < 0)
                 return;
             cvec_append_array(print_buffer, buffer, strlen(buffer));
             break;
         case FLOAT_EXPR:
+            ADD_SPACE;
             if (sprintf(buffer, "%ld", (uint64_t) expr->field1.float_value) < 0)
                 return;
             cvec_append_array(print_buffer, buffer, strlen(buffer));
@@ -208,6 +221,7 @@ void print_expression(AstNode *expr) {
         case VOID_EXPR:
             break;
         case VAR_EXPR:
+            ADD_SPACE;
             cvec_append_ref(print_buffer, expr->string);
             break;
         case ARRAYLITERAL_EXPR:
@@ -216,46 +230,52 @@ void print_expression(AstNode *expr) {
                 ADD_SPACE;
                 print_expression(nodevec_get(node_list, (size_t) vector_get(list, i)));
             }
-            vector_destroy_light(list);
+            vector_destroy(list);
             break;
         case STRUCTLITERAL_EXPR:
+            ADD_SPACE;
             cvec_append_ref(print_buffer, expr->string);
             list = expr->field1.list;
             for (size_t i = 0; i < list->size; ++i) {
                 ADD_SPACE;
                 print_expression(nodevec_get(node_list, (size_t) vector_get(list, i)));
             }
-            vector_destroy_light(list);
+            vector_destroy(list);
             break;
         case DOT_EXPR:
+            ADD_SPACE;
             print_expression(nodevec_get(node_list, expr->field1.node));
             ADD_SPACE;
             cvec_append_ref(print_buffer, expr->string);
             break;
         case ARRAYINDEX_EXPR:
+            ADD_SPACE;
             print_expression(nodevec_get(node_list, expr->field1.node));
             list = expr->field2.list;
             for (size_t i = 0; i < list->size; ++i) {
                 ADD_SPACE;
                 print_expression(nodevec_get(node_list, (size_t) vector_get(list, i)));
             }
-            vector_destroy_light(list);
+            vector_destroy(list);
             break;
         case CALL_EXPR:
+            ADD_SPACE;
             cvec_append_ref(print_buffer, expr->string);
             list = expr->field1.list;
             for (size_t i = 0; i < list->size; ++i) {
                 ADD_SPACE;
                 print_expression(nodevec_get(node_list, (size_t) vector_get(list, i)));
             }
-            vector_destroy_light(list);
+            vector_destroy(list);
             break;
         case UNOP_EXPR:
+            ADD_SPACE;
             cvec_append_ref(print_buffer, expr->string);
             ADD_SPACE;
             print_expression(nodevec_get(node_list, expr->field1.node));
             break;
         case BINOP_EXPR:
+            ADD_SPACE;
             print_expression(nodevec_get(node_list, expr->field1.node));
             ADD_SPACE;
             cvec_append_ref(print_buffer, expr->string);
@@ -263,6 +283,7 @@ void print_expression(AstNode *expr) {
             print_expression(nodevec_get(node_list, expr->field2.node));
             break;
         case IF_EXPR:
+            ADD_SPACE;
             print_expression(nodevec_get(node_list, expr->field1.node));
             ADD_SPACE;
             print_expression(nodevec_get(node_list, expr->field2.node));
@@ -282,6 +303,8 @@ void print_expression(AstNode *expr) {
             }
             ADD_SPACE;
             print_expression(nodevec_get(node_list, expr->field3.node));
+            vector_destroy(list);
+            vector_destroy(list2);
             break;
         default:
             return;
@@ -302,6 +325,7 @@ void print_type(AstNode *type) {
         case VOID_TYPE:
             break;
         case ARRAY_TYPE:
+            ADD_SPACE;
             print_type(nodevec_get(node_list, type->field2.node));
             ADD_SPACE;
             if (sprintf(buffer, "%ld", type->field1.int_value) < 0)
@@ -309,7 +333,12 @@ void print_type(AstNode *type) {
             cvec_append_array(print_buffer, buffer, strlen(buffer));
             break;
         case STRUCT_TYPE:
+            ADD_SPACE;
             cvec_append_ref(print_buffer, type->string);
+            break;
+        case VAR_TYPE:
+            ADD_SPACE;
+            cvec_append_array(print_buffer, "VARIABLE TYPE NOT RESOLVED", 26);
             break;
         default:
             return;
@@ -321,12 +350,13 @@ void print_type(AstNode *type) {
 void print_statement(AstNode *stmt) {
     char *header = stmt_output[stmt->type.stmt];
     cvec_append_array(print_buffer, header, stmt_lengths[stmt->type.stmt]);
+    ADD_SPACE;
 
     switch (stmt->type.stmt) {
         case LET_STMT:
             print_lvalue(nodevec_get(node_list, stmt->field1.node));
             ADD_SPACE;
-            print_expression(nodevec_get(node_list, stmt->field2.node));
+            print_expression(nodevec_get(node_list, stmt->field3.node));
             break;
         case ASSERT_STMT:
             print_expression(nodevec_get(node_list, stmt->field1.node));

@@ -16,7 +16,7 @@ TEST=test.jpl
 FLAGS=-p
 
 _LIB = stringops token vector dict vecs astnode
-_SRC = main lexer printer error parser
+_SRC = main lexer printer error parser typecheck
 
 LIBDEPS = $(patsubst %,$(INCDIR)/%.h,$(_LIB))
 SRCDEPS = $(patsubst %,$(INCDIR)/%.h,$(_SRC))

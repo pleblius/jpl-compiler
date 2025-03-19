@@ -23,7 +23,7 @@ size_t vector_size(Vector*);
 void vector_clear(Vector*);
 void vector_print(Vector*);
 void vector_destroy(Vector*);
-void vector_destroy_light(Vector*);
+void vector_destroy_deep(Vector*);
 int vector_is_empty(Vector*);
 
 #endif // VECTOR_H

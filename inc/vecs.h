@@ -59,6 +59,7 @@ void nodevec_expand(NodeVec*);
 void nodevec_shrink(NodeVec*);
 size_t nodevec_append(NodeVec*, AstNode);
 AstNode *nodevec_get(NodeVec*, size_t);
+int nodevec_remove(NodeVec*, size_t, AstNode*);
 AstNode *nodevec_peek_last(NodeVec*);
 AstNode nodevec_pop_last(NodeVec*);
 void nodevec_clear(NodeVec*);

@@ -67,13 +67,13 @@ void dict_expand(Dict *dict) {
 
     *dict = (Dict) {new_size, new_cap, new_array};
 
-    Node node;
+    Node *node;
     size_t count = 0;
     for (size_t i = 0; i < old_cap; ++i) {
-        node = old_array[i];
-        if (!node._node || node._tombstone) continue;
+        node = &old_array[i];
+        if (!node->_node || node->_tombstone) continue;
 
-        dict_add_ref(dict, node.key, node.value);
+        dict_add_ref(dict, node->key, node->value);
         ++count;
         if (count == old_size) break;
     }
@@ -102,23 +102,87 @@ int dict_try_array(Dict *dict, char *key, size_t len, void **value) {
     for (size_t i = 0; i < dict->capacity; ++i) {
         index = (base_index + i*i) % dict->capacity;
         node = dict->array[index];
+
+        // No matching node
         if (!node._node) break;
-        if (node._tombstone) continue;
+
+        // Check if node matches key
         if (node.key.length != len) continue;
-        if (!strncmp(key, node.key.string, len)) {
-            if (value != NULL)
-                *value = node.value;
-            return 1;
-        }
+        if (strncmp(key, node.key.string, len)) continue;
+
+        // If node is not tombstoned then node matches
+        if (node._tombstone) break;
+
+        if (value != NULL)
+            *value = node.value;
+        return 1;
     }
 
-    *value = NULL;
     return 0;
 }
 
-void *dict_add_string(Dict *dict, String key, void *value) {
-    if (!dict || !key.string) return NULL;
+// Adds value to dictionary if key is not associated with another value. Returns 1 on success, 0 on failure.
+// On failure, existing value is returned in output.
+int dict_add_string_if_empty(Dict *dict, String key, void *value, void **output) {
+    return dict_add_ref_if_empty(dict, (StringRef) {key.length, key.string}, value, output);
+}
 
+// Adds value to dictionary if key is not associated with another value. Returns 1 on success, 0 on failure.
+// On failure, existing value is returned in output.
+int dict_add_ref_if_empty(Dict *dict, StringRef key, void *value, void **output) {
+    if (!dict || !key.string || !key.length) return 0;
+
+    uint32_t hash = hash_string(key.string, key.length, SEED);
+    size_t base_index = hash % dict->capacity;
+    size_t index = 0;
+    size_t tomb_index = 0;
+    size_t tomb_flag = 0;
+    Node *node;
+    for (size_t i = 0; i < dict->capacity; ++i) {
+        index = (base_index + i*i) % dict->capacity;
+        node = &dict->array[index];
+
+        if (tomb_flag) index = tomb_index;
+
+        // No matches
+        if (!node->_node) {
+            ++dict->size;
+            dict->array[index] = (Node) { 1, 0, key, value };
+            break;
+        }
+
+        // Store first available tombstone node
+        if (node->_tombstone && !tomb_flag) {
+            tomb_flag = 1;
+            tomb_index = index;
+        }
+
+        // Check if keys match
+        if (node->key.length != key.length) continue;
+        if (strncmp(node->key.string, key.string, key.length)) continue;
+
+        // Keys must match - If not a tombstone then is an active node
+        if (!node->_tombstone) {
+            *output = node->value;
+            return 0;
+        }
+        ++dict->size;
+        dict->array[index] = (Node) { 1, 0, key, value };
+        break;
+    }
+
+    double alpha = ((double) dict->size) / ((double) dict->capacity);
+    if (alpha > MAX_LOAD_FACTOR) dict_expand(dict);
+    return 1;
+}
+
+// Adds value to dictionary if key is not associated with another value. Returns 1 on success, 0 on failure.
+// On failure, existing value is returned in output.
+int dict_add_array_if_empty(Dict *dict, char *key, size_t len, void *value, void **output) {
+    return dict_add_ref_if_empty(dict, (StringRef) {len, key}, value, output);
+}
+
+void *dict_add_string(Dict *dict, String key, void *value) {
     return dict_add_ref(dict, (StringRef) {key.length, key.string}, value);
 }
 
@@ -127,29 +191,43 @@ void *dict_add_ref(Dict *dict, StringRef key, void *value) {
 
     uint32_t hash = hash_string(key.string, key.length, SEED);
     size_t base_index = hash % dict->capacity;
+    size_t tomb_index = 0;
+    size_t tomb_flag = 0;
     size_t index;
-    Node node;
+    Node *node;
     void *ret_value = NULL;
 
     for (size_t i = 0; i < dict->capacity; ++i) {
         index = (base_index + i*i) % dict->capacity;
-        node = dict->array[index];
+        node = &dict->array[index];
 
-        if (!node._node || node._tombstone) {
+        if (tomb_flag) index = tomb_index;
+
+        // No match
+        if (!node->_node) {
             ++dict->size;
             dict->array[index] = (Node) { 1, 0, key, value };
             ret_value = NULL;
             break;
         }
-        else if (node._node && !node._tombstone) {
-            if (node.key.length != key.length) continue;
-            if (!strncmp(key.string, node.key.string, key.length)) {
-                ret_value = node.value;
-                dict->array[index] = (Node) { 1, 0, key, value };
-                break;
-            }
+
+        if (node->_tombstone && !tomb_flag) {
+            tomb_flag = 1;
+            tomb_index = index;
         }
+
+        if (node->key.length != key.length) continue;
+        if (strncmp(key.string, node->key.string, key.length)) continue;
+
+        if (node->_tombstone) 
+            ++dict->size;
+        else
+            ret_value = node->value;
+
+        dict->array[index] = (Node) {1, 0, key, value};
+        break;
     }
+
     double alpha = ((double) dict->size) / ((double) dict->capacity);
     if (alpha > MAX_LOAD_FACTOR) dict_expand(dict);
 
@@ -157,40 +235,38 @@ void *dict_add_ref(Dict *dict, StringRef key, void *value) {
 }
 
 void *dict_add_array(Dict *dict, char *key, size_t len, void *value) {
-    if (!dict || !key || !len) return 0;
     return dict_add_ref(dict, (StringRef) {len, key}, value);
 }
 
 void *dict_remove_string(Dict *dict, String key) {
-    if (!dict || !key.string) return NULL;
-
     return dict_remove_ref(dict, (StringRef) {key.length, key.string});
 }
+
 void *dict_remove_ref(Dict *dict, StringRef key) {
-    if (!dict || !key.string) return NULL;
+    if (!dict || !key.string || !key.length) return NULL;
 
     uint32_t hash = hash_string(key.string, key.length, SEED);
     size_t base_index = hash % dict->capacity;
     size_t index;
-    Node node;
+    Node *node;
 
     for (size_t i = 0; i < dict->capacity; ++i) {
         index = (base_index + i*i) % dict->capacity;
-        node = dict->array[index];
-        if (!node._node) break;
-        if (node._tombstone) continue;
-        if (node.key.length != key.length) continue;
-        if (!strncmp(key.string, node.key.string, key.length)) {
-            dict->array[index]._tombstone = 1;
-            --dict->size;
-            return node.value;
-        }
+        node = &dict->array[index];
+       
+        if (!node->_node) break;
+        if (node->key.length != key.length) continue;
+        if (strncmp(node->key.string, key.string, key.length)) continue;
+        if (node->_tombstone) break;
+
+        node->_tombstone = 1;
+        --dict->size;
+        return node->value;
     }
 
     return NULL;
 }
 void *dict_remove_array(Dict *dict, char *key, size_t len) {
-    if (!dict || !key || len == 0) return NULL;
     return dict_remove_ref(dict, (StringRef) {len, key});
 }
 

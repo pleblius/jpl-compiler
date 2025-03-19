@@ -5,9 +5,12 @@
 
 #include "parser.h"
 #include "stringops.h"
+#include "typecheck.h"
 
 #define NO_PRECEDENCE -1
 #define MIN_PRECEDENCE 0
+
+#define CHECK(type, index, output) (if (!expect_token(type, index, output)) return EXIT_FAILURE)
 
 static int parse_exit_status = EXIT_SUCCESS;
 static TokenVec *token_vector;
@@ -20,8 +23,8 @@ int parse_tokens(TokenVec *tokens, NodeVec **output_nodes, Vector **output_cmds)
     if (!tokens || !output_cmds || !output_nodes) return EXIT_FAILURE;
 
     token_vector = tokens;
-    node_vector = nodevec_create_cap(token_vector->size);
-    cmd_list = vector_create_cap(token_vector->size);
+    node_vector = nodevec_create_cap(token_vector->size << 1);
+    cmd_list = vector_create_cap(token_vector->size >> 1);
     if (!node_vector || !cmd_list) return EXIT_FAILURE;
 
     uint32_t index = 0;
@@ -57,10 +60,11 @@ int parse_tokens(TokenVec *tokens, NodeVec **output_nodes, Vector **output_cmds)
 
 int expect_token(TokenType expected_type, uint32_t index, StringRef *output) {
     if (peek_token_type(index) != expected_type) {
-        Token *expected = malloc(sizeof(Token)); if (!expected) return 0;
+        Token *expected = malloc(sizeof(Token)); if (!expected) exit(EXIT_FAILURE);
         *expected = (Token) {expected_type, 0, {strlen(token_names[expected_type]), token_names[expected_type]}};
 
         add_parse_error(UNEXPECTED_TOKEN, tokenvec_get(token_vector, index), expected);
+        free(expected);
         parse_exit_status = EXIT_FAILURE;
         return 0;
     }
@@ -109,7 +113,8 @@ int parse_command(uint32_t *p_index, uint64_t *output_index) {
     uint32_t index = *p_index;
     uint64_t output = 0;
     AstNode cmd = get_empty_node();
-    
+
+    uint32_t paren_index;
     switch (peek_token_type(index)) {
         case READ:
             cmd.type.cmd = READ_CMD;
@@ -132,7 +137,7 @@ int parse_command(uint32_t *p_index, uint64_t *output_index) {
             expect_token(LET, index++, NULL);
             parse_lvalue(&index, &cmd.field1.node);
             expect_token(EQUALS, index++, NULL);
-            parse_expression(&index, &cmd.field2.node, MIN_PRECEDENCE);
+            parse_expression(&index, &cmd.field3.node, MIN_PRECEDENCE);
             break;
         case ASSERT:
             cmd.type.cmd = ASSERT_CMD;
@@ -161,6 +166,7 @@ int parse_command(uint32_t *p_index, uint64_t *output_index) {
             expect_token(FN, index++, NULL);
             expect_token(VARIABLE, index++, &cmd.string);
             expect_token(LPAREN, index++, NULL);
+            paren_index = index-1;
 
             cmd.field1.list = vector_create(); if (!cmd.field1.list) return 0;
 
@@ -174,10 +180,15 @@ int parse_command(uint32_t *p_index, uint64_t *output_index) {
                 else if (!expect_token(COMMA, index++, NULL)) break;
             }
 
-            expect_token(RPAREN, index++, NULL);
+            if (!expect_token(RPAREN, index++, NULL))
+                add_parse_error(UNCLOSED_PAREN, tokenvec_get(token_vector, index-1), tokenvec_get(token_vector, paren_index));
+
             expect_token(COLON, index++, NULL);
             parse_type(&index, &cmd.field2.node);
+
             expect_token(LCURLY, index++, NULL);
+            paren_index = index-1;
+
             if (peek_token_type(index) == RCURLY) break;
             expect_token(NEWLINE, index++, NULL);
 
@@ -188,42 +199,54 @@ int parse_command(uint32_t *p_index, uint64_t *output_index) {
                 
                 if (parse_statement(&index, &output))
                     vector_append(cmd.field3.list, (void*) output);
+                else if (!try_find_next(&index, NEWLINE, RCURLY))
+                    break;
 
                 if (!expect_token(NEWLINE, index++, NULL))
                     break;
             }
+            if (!expect_token(RCURLY, index++, NULL))
+                add_parse_error(UNCLOSED_PAREN, tokenvec_get(token_vector, index-1), tokenvec_get(token_vector, paren_index));
 
-            expect_token(RCURLY, index++, NULL);
             break;
         case STRUCT:
             cmd.type.cmd = STRUCT_CMD;
             expect_token(STRUCT, index++, NULL);
             expect_token(VARIABLE, index++, &cmd.string);
             expect_token(LCURLY, index++, NULL);
+            paren_index = index-1;
+
             if (peek_token_type(index) == RCURLY) break;
             expect_token(NEWLINE, index++, NULL);
 
             cmd.field1.list = vector_create(); if (!cmd.field1.list) return 0;
-
+            AstNode member;
             while (1) {
                 if (peek_token_type(index) == RCURLY) break;
+                member = get_empty_node();
+                member.token_index = index;
 
-                if (parse_binding(&index, &output))
-                    vector_append(cmd.field1.list, (void*) output);
-                else if (!try_find_next(&index, NEWLINE, RCURLY))
-                    break;
+                expect_token(VARIABLE, index++, &member.string);
+                expect_token(COLON, index++, NULL);
+                if (!parse_type(&index, &member.field2.node))
+                    try_find_next(&index, NEWLINE, RCURLY);
+
+                vector_append(cmd.field1.list, (void*) nodevec_append(node_vector, member));
                 
                 if (!expect_token(NEWLINE, index++, NULL))
                     break;
             }
-            expect_token(RCURLY, index++, NULL);
-
+            if (!expect_token(RCURLY, index++, NULL))
+                add_parse_error(UNCLOSED_PAREN, tokenvec_get(token_vector, index-1), tokenvec_get(token_vector, paren_index));
+            
+            cmd.field2.node = nodevec_append(node_vector, (AstNode) {*p_index+1, {.type=STRUCT_TYPE}, {0}, {0}, {0}, {0}, cmd.string});
             break;
         default:
             parse_error(BAD_CMD, index);
             return 0;
     }
 
+    cmd.token_index = *p_index;
     *output_index = nodevec_append(node_vector, cmd);
     *p_index = index;
     return 1;
@@ -242,20 +265,26 @@ int parse_lvalue(uint32_t *p_index, uint64_t *output_index) {
                 lvalue.type.lvalue = ARRAY_LVALUE;
                 lvalue.field1.list = vector_create(); if (!lvalue.field1.list) return 0;
                 expect_token(LSQUARE, index++, NULL);
+                uint32_t paren_index = index-1;
 
-                StringRef var;
+                AstNode inner_value = (AstNode) {0, {.type=INT_TYPE}, {0}, {0}, {0}, {0}, {0, NULL}};
                 while(1) {
                     if (peek_token_type(index) == RSQUARE) break;
-                    if (!expect_token(VARIABLE, index, &var)) break;
-            
-                    vector_append(lvalue.field1.list, (void*) ((uint64_t) index));
+                    if (expect_token(VARIABLE, index, &inner_value.string)) {
+                        inner_value.token_index = index;
+                        vector_append(lvalue.field1.list, (void*) nodevec_append(node_vector, inner_value));
+                    }
+                    else if (!try_find_next(&index, COMMA, RSQUARE))
+                        break;
+
                     ++index;
                     
                     if (peek_token_type(index) == RSQUARE) break;
                     else if (!expect_token(COMMA, index++, NULL)) break;
                 }
 
-                expect_token(RSQUARE, index++, NULL);
+                if (!expect_token(RSQUARE, index++, NULL))
+                    add_parse_error(UNCLOSED_PAREN, tokenvec_get(token_vector, index-1), tokenvec_get(token_vector, paren_index));
             }
             break;
         default:
@@ -263,6 +292,7 @@ int parse_lvalue(uint32_t *p_index, uint64_t *output_index) {
             return 0;
     }
 
+    lvalue.token_index = *p_index;
     *output_index = nodevec_append(node_vector, lvalue);
     *p_index = index;
     return 1;
@@ -288,6 +318,7 @@ int parse_expression(uint32_t *p_index, uint64_t *output_index, int min_preceden
         // LHS
         expr.field1.node = expr_index;
         expect_token(OP, index++, &expr.string);
+        expr.token_index = index-1;
         // RHS
         parse_expression(&index, &expr.field2.node, precedence + 1);
 
@@ -297,6 +328,8 @@ int parse_expression(uint32_t *p_index, uint64_t *output_index, int min_preceden
             precedence = NO_PRECEDENCE;
 
         expr_index = nodevec_append(node_vector, expr);
+        if (!get_primitive_expr_type(expr_index))
+            return 0;
     }
 
     *p_index = index;
@@ -310,6 +343,7 @@ int parse_expression_literal(uint32_t *p_index, uint64_t *output_index) {
 
     uint64_t output;
     StringRef var;
+    uint32_t paren_index = 0;
     switch(peek_token_type(index)) {
         case OP:
             expr.type.expr = UNOP_EXPR;
@@ -352,10 +386,12 @@ int parse_expression_literal(uint32_t *p_index, uint64_t *output_index) {
             break;
         case LPAREN:
             expect_token(LPAREN, index++, NULL);
+            paren_index = index-1;
             parse_expression(&index, &expr.field1.node, MIN_PRECEDENCE);
             if (!expect_token(RPAREN, index++, NULL))
-                add_parse_error(UNCLOSED_PAREN, tokenvec_get(token_vector, index), tokenvec_get(token_vector, *p_index));
-            expr = nodevec_pop_last(node_vector);
+                add_parse_error(UNCLOSED_PAREN, tokenvec_get(token_vector, index-1), tokenvec_get(token_vector, paren_index));
+            if (!nodevec_remove(node_vector, expr.field1.node, &expr))
+                return 0;
             break;
         case VARIABLE:
             expr.type.expr = VAR_EXPR;
@@ -364,9 +400,9 @@ int parse_expression_literal(uint32_t *p_index, uint64_t *output_index) {
             if (peek_token_type(index) == LCURLY) {
                 expr.type.expr = STRUCTLITERAL_EXPR;
                 expect_token(LCURLY, index++, NULL);
+                paren_index = index-1;
 
                 expr.field1.list = vector_create(); if (!expr.field1.list) return 0;
-
                 while (1) {
                     if (peek_token_type(index) == RCURLY) break;
 
@@ -378,12 +414,13 @@ int parse_expression_literal(uint32_t *p_index, uint64_t *output_index) {
                     if (peek_token_type(index) == RCURLY) break;
                     else if (!expect_token(COMMA, index++, NULL)) break;
                 }
-
-                expect_token(RCURLY, index++, NULL);
+                if (!expect_token(RCURLY, index++, NULL))
+                    add_parse_error(UNCLOSED_PAREN, tokenvec_get(token_vector, index-1), tokenvec_get(token_vector, paren_index));
             }
             else if (peek_token_type(index) == LPAREN) {
                 expr.type.expr = CALL_EXPR;
                 expect_token(LPAREN, index++, NULL);
+                paren_index = index-1;
 
                 expr.field1.list = vector_create(); if (!expr.field1.list) return 0;
                 while (1) {
@@ -395,12 +432,14 @@ int parse_expression_literal(uint32_t *p_index, uint64_t *output_index) {
                     if (peek_token_type(index) == RPAREN) break;
                     else if (!expect_token(COMMA, index++, NULL)) break;
                 }
-                expect_token(RPAREN, index++, NULL);
+                if (!expect_token(RPAREN, index++, NULL))
+                    add_parse_error(UNCLOSED_PAREN, tokenvec_get(token_vector, index-1), tokenvec_get(token_vector, paren_index));
             }
             break;
         case LSQUARE:
             expr.type.expr = ARRAYLITERAL_EXPR;
             expect_token(LSQUARE, index++, &expr.string);
+            paren_index = index-1;
 
             expr.field1.list = vector_create(); if (!expr.field1.list) return 0;
             while (1) {
@@ -409,15 +448,19 @@ int parse_expression_literal(uint32_t *p_index, uint64_t *output_index) {
                     vector_append(expr.field1.list, (void*) output);
                 else if (!try_find_next(&index, COMMA, RSQUARE))
                     break;
+
                 if (peek_token_type(index) == RSQUARE) break;
                 else if (!expect_token(COMMA, index++, NULL)) break;
             }
-            expect_token(RSQUARE, index++, NULL);
+            if (!expect_token(RSQUARE, index++, NULL))
+                add_parse_error(UNCLOSED_PAREN, tokenvec_get(token_vector, index-1), tokenvec_get(token_vector, paren_index));
+
             break;
         case ARRAY:
             expr.type.expr = ARRAYLOOP_EXPR;
             expect_token(ARRAY, index++, NULL);
             expect_token(LSQUARE, index++, NULL);
+            paren_index = index-1;
 
             expr.field1.list = vector_create();
             expr.field2.list = vector_create();
@@ -425,22 +468,31 @@ int parse_expression_literal(uint32_t *p_index, uint64_t *output_index) {
 
             while (1) {
                 if (peek_token_type(index) == RSQUARE) break;
-                expect_token(VARIABLE, index, &var);
-                vector_append(expr.field1.list, (void*) (uint64_t) index);
+                if (expect_token(VARIABLE, index, &var))
+                    vector_append(expr.field1.list, (void*) (uint64_t) index);
+                else if (!try_find_next(&index, COLON, RSQUARE))
+                    break;
                 ++index;
+
                 expect_token(COLON, index++, NULL);
-                parse_expression(&index, &output, MIN_PRECEDENCE);
-                vector_append(expr.field2.list, (void*) output);
+                if (parse_expression(&index, &output, MIN_PRECEDENCE))
+                    vector_append(expr.field2.list, (void*) output);
+                else if (!try_find_next(&index, COMMA, RSQUARE))
+                    break;
+
                 if (peek_token_type(index) == RSQUARE) break;
                 else if (!expect_token(COMMA, index++, NULL)) break;
             }
-            expect_token(RSQUARE, index++, NULL);
+            if (!expect_token(RSQUARE, index++, NULL))
+                add_parse_error(UNCLOSED_PAREN, tokenvec_get(token_vector, index-1), tokenvec_get(token_vector, paren_index));
+
             parse_expression(&index, &expr.field3.node, MIN_PRECEDENCE);
             break;
         case SUM:
             expr.type.expr = SUMLOOP_EXPR;
             expect_token(SUM, index++, NULL);
             expect_token(LSQUARE, index++, NULL);
+            paren_index = index-1;
 
             expr.field1.list = vector_create();
             expr.field2.list = vector_create();
@@ -448,16 +500,24 @@ int parse_expression_literal(uint32_t *p_index, uint64_t *output_index) {
 
             while (1) {
                 if (peek_token_type(index) == RSQUARE) break;
-                expect_token(VARIABLE, index, &var);
-                vector_append(expr.field1.list, (void*) (uint64_t) index);
+                if (expect_token(VARIABLE, index, &var))
+                    vector_append(expr.field1.list, (void*) (uint64_t) index);
+                else if (!try_find_next(&index, COLON, RSQUARE))
+                    break;
                 ++index;
+
                 expect_token(COLON, index++, NULL);
-                parse_expression(&index, &output, MIN_PRECEDENCE);
-                vector_append(expr.field2.list, (void*) output);
+                if (parse_expression(&index, &output, MIN_PRECEDENCE))
+                    vector_append(expr.field2.list, (void*) output);
+                else if (!try_find_next(&index, COLON, RSQUARE))
+                    break;
+
                 if (peek_token_type(index) == RSQUARE) break;
                 else if (!expect_token(COMMA, index++, NULL)) break;
             }
-            expect_token(RSQUARE, index++, NULL);
+            if (!expect_token(RSQUARE, index++, NULL))
+                add_parse_error(UNCLOSED_PAREN, tokenvec_get(token_vector, index-1), tokenvec_get(token_vector, paren_index));
+
             parse_expression(&index, &expr.field3.node, MIN_PRECEDENCE);
             break;
         case IF:
@@ -479,6 +539,7 @@ int parse_expression_literal(uint32_t *p_index, uint64_t *output_index) {
     while (type == DOT || type == LSQUARE) {
         superexpr = get_empty_node();
         superexpr.field1.node = nodevec_append(node_vector, expr);
+        get_primitive_expr_type(superexpr.field1.node);
 
         if (type == DOT) {
             superexpr.type.expr = DOT_EXPR;
@@ -488,6 +549,8 @@ int parse_expression_literal(uint32_t *p_index, uint64_t *output_index) {
         else if (type == LSQUARE) {
             superexpr.type.expr = ARRAYINDEX_EXPR;
             expect_token(LSQUARE, index++, NULL);
+            paren_index = index-1;
+
             superexpr.field2.list = vector_create(); if (!superexpr.field2.list) return 0;
             while (1) {
                 if (peek_token_type(index) == RSQUARE) break;
@@ -498,14 +561,17 @@ int parse_expression_literal(uint32_t *p_index, uint64_t *output_index) {
                 if (peek_token_type(index) == RSQUARE) break;
                 else if (!expect_token(COMMA, index++, NULL)) break;
             }
-            expect_token(RSQUARE, index++, NULL);
+            if (!expect_token(RSQUARE, index++, NULL))
+                add_parse_error(UNCLOSED_PAREN, tokenvec_get(token_vector, index-1), tokenvec_get(token_vector, paren_index));
         }
 
         expr = superexpr;
         type = peek_token_type(index);
     }
 
+    expr.token_index = *p_index;
     *output_index = nodevec_append(node_vector, expr);
+    get_primitive_expr_type(*output_index);
     *p_index = index;
     return 1;
 }
@@ -514,12 +580,11 @@ int parse_binding(uint32_t *p_index, uint64_t *output_index) {
     uint32_t index = *p_index;
     AstNode bind = get_empty_node();
 
-    if (!parse_lvalue(&index, &bind.field1.node)) {
-        parse_error(BAD_BIND, *p_index);
-    }
+    parse_lvalue(&index, &bind.field1.node);
     expect_token(COLON, index++, NULL);
     parse_type(&index, &bind.field2.node);
-
+    
+    bind.token_index = *p_index;
     *output_index = nodevec_append(node_vector, bind);
     *p_index = index;
     return 1;
@@ -528,55 +593,55 @@ int parse_binding(uint32_t *p_index, uint64_t *output_index) {
 int parse_type(uint32_t *p_index, uint64_t *output_index) {
     uint32_t index = *p_index;
     AstNode type = get_empty_node();
-
+    
     switch(peek_token_type(index)) {
         case INT:
             type.type.type = INT_TYPE;
-            expect_token(INT, index++, NULL);
+            ++index;
             break;
         case BOOL:
             type.type.type = BOOL_TYPE;
-            expect_token(BOOL, index++, NULL);
+            ++index;
             break;
         case FLOAT:
             type.type.type = FLOAT_TYPE;
-            expect_token(FLOAT, index++, NULL);
+            ++index;
             break;
         case VOID:
             type.type.type = VOID_TYPE;
-            expect_token(VOID, index++, NULL);
+            ++index;
             break;
         case VARIABLE:
-            type.type.type = STRUCT_TYPE;
             expect_token(VARIABLE, index++, &type.string);
+            type.type.type = STRUCT_TYPE;
             break;
         default:
             parse_error(BAD_TYPE, index);
             return 0;
     }
-
+    uint32_t paren_index;
     while (peek_token_type(index) == LSQUARE) {
         AstNode supertype = get_empty_node();
         supertype.type.type = ARRAY_TYPE;
-        supertype.field2.node = nodevec_append(node_vector, type);
         supertype.field1.int_value = 1;
+        supertype.field2.node = nodevec_append(node_vector, type);
         expect_token(LSQUARE, index++, NULL);
+        paren_index = index-1;
 
         while (1) {
             if (peek_token_type(index) == RSQUARE)
                 break;
-
             if (!expect_token(COMMA, index++, NULL))
                 break;
-            
             supertype.field1.int_value += 1;
         }
-
-        expect_token(RSQUARE, index++, NULL);
+        if (!expect_token(RSQUARE, index++, NULL))
+            add_parse_error(UNCLOSED_PAREN, tokenvec_get(token_vector, index-1), tokenvec_get(token_vector, paren_index));
 
         type = supertype;
     }
 
+    type.token_index = *p_index;
     *output_index = nodevec_append(node_vector, type);
     *p_index = index;
     return 1;
@@ -592,7 +657,7 @@ int parse_statement(uint32_t *p_index, uint64_t *output_index) {
             expect_token(LET, index++, NULL);
             parse_lvalue(&index, &stmt.field1.node);
             expect_token(EQUALS, index++, NULL);
-            parse_expression(&index, &stmt.field2.node, MIN_PRECEDENCE);
+            parse_expression(&index, &stmt.field3.node, MIN_PRECEDENCE);
             break;
         case ASSERT:
             stmt.type.stmt = ASSERT_STMT;
@@ -611,6 +676,7 @@ int parse_statement(uint32_t *p_index, uint64_t *output_index) {
             return 0;
     }
 
+    stmt.token_index = *p_index;
     *output_index = nodevec_append(node_vector, stmt);
     *p_index = index;
     return 1;
@@ -628,6 +694,22 @@ int is_binary_operator(uint32_t token_index) {
             return 1;
         default:
             return 1;
+    }
+}
+
+int is_boolean_operator(StringRef string) {
+    if (!string.string || !string.length) return 0;
+
+    switch (string.string[0]) {
+        case '|':
+        case '&':
+        case '=':
+        case '>':
+        case '<':
+        case '!':
+            return 1;
+        default:
+            return 0;
     }
 }
 
@@ -651,4 +733,73 @@ int get_operator_precedence(StringRef string) {
         default:
             return NO_PRECEDENCE;
     }
+}
+
+int get_primitive_expr_type(uint32_t expr_index) {
+    AstNode *expr = nodevec_get(node_vector, expr_index);
+    AstNode newtype = get_empty_node();
+
+    switch (expr->type.expr) {
+        case INT_EXPR:
+            newtype.type.type = INT_TYPE;
+            newtype.token_index = expr->token_index;
+            break;
+        case FLOAT_EXPR:
+            newtype.type.type = FLOAT_TYPE;
+            newtype.token_index = expr->token_index;
+            break;
+        case TRUE_EXPR:
+            // Fallthrough
+        case FALSE_EXPR:
+            newtype.type.type = BOOL_TYPE;
+            newtype.token_index = expr->token_index;
+            break;
+        case VOID_EXPR:
+            newtype.type.type = VOID_TYPE;  
+            newtype.token_index = expr->token_index;
+            break;          
+        case VAR_EXPR:
+            // Fallthrough
+        case STRUCTLITERAL_EXPR:
+            // Fallthrough
+        case DOT_EXPR:
+            // Fallthrough
+        case CALL_EXPR:
+            newtype.type.type = VAR_TYPE;
+            newtype.token_index = expr->token_index;
+            break;
+        case UNOP_EXPR:
+            return 1;
+        case BINOP_EXPR:
+            newtype.token_index = expr->token_index;
+            if (is_boolean_operator(expr->string))
+                newtype.type.type = BOOL_TYPE;
+            else
+                newtype.type.type = VAR_TYPE;
+            break;
+        case IF_EXPR:
+            return 1;
+        case ARRAYLITERAL_EXPR:
+            if (expr->field1.list->size == 0) return 0;
+            newtype.type.type = ARRAY_TYPE;
+            newtype.token_index = expr->token_index;
+            newtype.field1.int_value = 1;
+            break;
+        case ARRAYINDEX_EXPR:
+            return 1;
+        case SUMLOOP_EXPR:
+            if (expr->field1.list->size == 0) return 0;
+            break;
+        case ARRAYLOOP_EXPR:
+            if (expr->field1.list->size == 0) return 0;
+            newtype.type.type = ARRAY_TYPE;
+            newtype.token_index = expr->token_index;
+            newtype.field1.int_value = expr->field1.list->size;
+            break;
+        default:
+            return 0;
+    }
+
+    expr->field4.node = nodevec_append(node_vector, newtype);
+    return 1;
 }

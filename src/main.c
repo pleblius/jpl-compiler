@@ -11,6 +11,7 @@
 #include "printer.h"
 #include "error.h"
 #include "parser.h"
+#include "typecheck.h"
 
 static RunMode run_mode = RUN_MODE;
 static PrintMode print_mode = STANDARD_PRINT;
@@ -211,7 +212,12 @@ int run_compilation() {
             break;
         case TYPE_MODE:
             lex_string(file_string, file_size, &token_vector);
-            // return type_tokens(token_vector, token_vector->size, node_vector);
+            if (parse_tokens(token_vector, &node_vector, &cmd_vector) == EXIT_FAILURE)
+                exit_status = EXIT_FAILURE;
+                
+            token_list_setup(token_vector);
+            if (type_check(token_vector, node_vector, cmd_vector) == EXIT_FAILURE)
+                exit_status = EXIT_FAILURE;
             break;
         case C_MODE:
             // Fall
@@ -226,14 +232,6 @@ int run_compilation() {
 }
 
 void print_fail() {
-    if (print_mode == NO_PRINT) {
-        clear_errors();
-        return;
-    }
-
-    print_errors(token_vector);
-    clear_errors();
-
     printf("Compilation failed\n");
 }
 
@@ -246,6 +244,9 @@ void print_success() {
             print_nodes(node_vector, cmd_vector, token_vector);
             break;
         case TYPE_MODE:
+            set_type_check(1);
+            print_nodes(node_vector, cmd_vector, token_vector);
+            break;
         case C_MODE:
         case RUN_MODE:
         default:

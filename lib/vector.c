@@ -231,7 +231,7 @@ void vector_print(Vector *vector) {
 }
 
 // Destroys the given vector, freeing all structs.
-void vector_destroy(Vector *vector) {
+void vector_destroy_deep(Vector *vector) {
     if (!vector) {
         fprintf(stderr, "Invalid vector reference.\n");
         return;
@@ -243,7 +243,7 @@ void vector_destroy(Vector *vector) {
 }
 
 // Destroys the vector without touching its internal elements.
-void vector_destroy_light(Vector *vector) {
+void vector_destroy(Vector *vector) {
     if (!vector) {
         fprintf(stderr, "Invalid vector reference.\n");
         return;

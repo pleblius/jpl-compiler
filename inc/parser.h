@@ -24,5 +24,8 @@ int parse_binding(uint32_t*, uint64_t*);
 int parse_type(uint32_t*, uint64_t*);
 int parse_statement(uint32_t*, uint64_t*);
 int is_binary_operator(uint32_t);
+int is_boolean_operator(StringRef);
 int get_operator_precedence(StringRef);
+int get_primitive_expr_type(uint32_t);
+
 #endif // PARSER_H

@@ -259,6 +259,15 @@ AstNode *nodevec_get(NodeVec *vector, size_t index) {
 
     return &VECTOR_ARRAY[index];
 }
+int nodevec_remove(NodeVec *vector, size_t index, AstNode *output) {
+    if (!vector || index >= VECTOR_SIZE) return 0;
+
+    *output = VECTOR_ARRAY[index];
+    --VECTOR_SIZE;
+    memmove(VECTOR_ARRAY + index, VECTOR_ARRAY+index+1, VECTOR_SIZE - index);
+
+    return 1;
+}
 AstNode *nodevec_peek_last(NodeVec *vector) {
     if (!vector || VECTOR_IS_EMPTY) return NULL;
 
